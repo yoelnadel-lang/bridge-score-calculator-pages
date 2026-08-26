@@ -64,12 +64,25 @@
     if (!defects.length) {                     // ברירת מחדל מנ"ג: 1A
       sMax = 1; extent = 0; out.defaulted = true;
     } else {
-      sMax = Math.max(...defects.map((d) => d.s));
-      let num = 0;
+      // סעיף 02.7.4: פגמים מרובים על אותו תת-רכיב מצטמצמים תחילה לזוג (S,Ex)
+      // אחד לתת-רכיב — S הוא החומרה הגרועה ביותר; כשכמה פגמים שווים בחומרה
+      // המרבית (מצב ב', "פגמים משולבים") ההיקף הוא ההיקף הגרוע מביניהם, לא
+      // סכומם — סכימה עלולה לחרוג מהתקרה 0.7 (טבלה 8) ולהפיק ECS שאינו קיים
+      // בטבלה 11. תת-רכיב שאין לו בכלל הגדרה (sub שהוסר) אינו נספר.
+      const bySub = new Map();
       for (const d of defects) {
-        if (d.s !== sMax) continue;
-        const w = wse.has(String(d.sub)) ? wse.get(String(d.sub)) : 1.0;
-        num += (EXTENT[d.ex] ? EXTENT[d.ex].value : 0) * w;
+        const key = String(d.sub);
+        if (!wse.has(key)) continue;
+        const exVal = EXTENT[d.ex] ? EXTENT[d.ex].value : 0;
+        const cur = bySub.get(key);
+        if (!cur || d.s > cur.s || (d.s === cur.s && exVal > cur.exVal)) bySub.set(key, { s: d.s, exVal });
+      }
+      const subRatings = [...bySub.values()];
+      sMax = subRatings.length ? Math.max(...subRatings.map((v) => v.s)) : 1;
+      let num = 0;
+      for (const [subId, v] of bySub) {
+        if (v.s !== sMax) continue;
+        num += v.exVal * wse.get(subId);
       }
       extent = num / sumWse;
     }

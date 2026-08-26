@@ -84,6 +84,38 @@ check("S=5, חשיבות גבוהה מאוד ⇒ ECI=5.0", c5.eci, 5.0, 1e-9);
 check("CPI(SCS=5) = 0", Calc.cpi(5), 0, 1e-9);
 check("CPI(SCS=1) = 100", Calc.cpi(1), 100, 1e-9);
 
+// סעיף 02.7.4: כמה פגמים על אותו תת-רכיב, שווים בחומרה המרבית — ההיקף
+// נקבע לפי הפגם הגרוע מביניהם, לא סכום ההיקפים (טבלה 11: לחומרה 3 קיימים
+// רק הערכים 3.0/3.1/3.3/3.7 — לעולם לא 4.4 או 5.1)
+const oneSub = (subs) => subs || [{ id: 1, size: 1 }];
+const c2tied = Calc.computeComponent(
+  { key: "x", name: "x", importance: "veryHigh", surveyed: true, subs: oneSub() },
+  [{ sub: 1, s: 3, ex: "E" }, { sub: 1, s: 3, ex: "E" }]
+);
+check("שני פגמים תואמי-חומרה על אותו תת-רכיב: ECS=3.7 (לא 4.4)", c2tied.ecs, 3.7, 1e-9);
+const c3tied = Calc.computeComponent(
+  { key: "x", name: "x", importance: "veryHigh", surveyed: true, subs: oneSub() },
+  [{ sub: 1, s: 3, ex: "E" }, { sub: 1, s: 3, ex: "E" }, { sub: 1, s: 3, ex: "E" }]
+);
+check("שלושה פגמים תואמי-חומרה על אותו תת-רכיב: ECS=3.7 (לא 5.1)", c3tied.ecs, 3.7, 1e-9);
+const cMixed = Calc.computeComponent(
+  { key: "x", name: "x", importance: "veryHigh", surveyed: true, subs: oneSub() },
+  [{ sub: 1, s: 3, ex: "C" }, { sub: 1, s: 3, ex: "E" }]  // היקף שונה, חומרה זהה — לוקחים את הגרוע
+);
+check("שני פגמים תואמי-חומרה, היקפים שונים: נלקח ההיקף הגרוע (E)", cMixed.ecs, 3.7, 1e-9);
+checkTrue("כל ECS אפשרי הוא אחד מארבעת הערכים הלגיטימיים לפי טבלה 11",
+  [c2tied.ecs, c3tied.ecs, cMixed.ecs].every((v) => {
+    const frac = +(v - Math.floor(v)).toFixed(2);
+    return [0, 0.1, 0.3, 0.7].includes(frac);
+  }));
+
+// פגם המפנה לתת-רכיב שאינו קיים — אינו נספר (לא בעל ולא במכנה)
+const cOrphan = Calc.computeComponent(
+  { key: "x", name: "x", importance: "veryHigh", surveyed: true, subs: [{ id: 1, size: 1 }, { id: 2, size: 1 }] },
+  [{ sub: 99, s: 3, ex: "E" }]
+);
+check("פגם על תת-רכיב לא-קיים מתעלם ממנו (ברירת מחדל 1A)", cOrphan.ecs, 1.0, 1e-9);
+
 // רכיב לא נסקר — מחוץ לחישוב
 const resNS = Calc.computeStructure({
   structureClass: "BRG",

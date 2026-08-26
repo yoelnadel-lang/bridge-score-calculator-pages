@@ -48,7 +48,7 @@ function renderSpanDims(state) {
 
 // --- טאבים של מפתחים ---
 function renderSpanTabs(state, activeSpan) {
-  if (state.spanCount <= 2 && state.spanCount === 1)
+  if (state.spanCount === 1)
     return '<button class="tab active" data-action="span-tab" data-span="1">המבנה כולו</button>';
   return state.spans.map((s) =>
     `<button class="tab ${s.id === activeSpan ? "active" : ""}" data-action="span-tab" data-span="${s.id}">מפתח ${s.id}</button>`
@@ -131,7 +131,7 @@ function renderComponent(comp, ui) {
     const cat = DEFECT_CATALOG.defects.find((x) => x.code === d.def);
     return `<tr>
       <td>${esc(d.def || "—")}</td>
-      <td>${esc(cat ? cat.name_he : d.note === "רכיב תקין" ? "רכיב תקין" : d.defName || "")}</td>
+      <td>${esc(cat ? cat.name_he : d.note === "רכיב תקין" ? "רכיב תקין" : "")}</td>
       <td>${d.sub}</td><td>${d.s}</td><td>${esc(d.ex)}</td>
       <td>${esc(d.note || "")}</td>
       <td><button class="btn btn-sm btn-danger" data-action="defect-remove" data-defect="${d.uid}">✕</button></td>

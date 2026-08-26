@@ -308,7 +308,15 @@ function init() {
   document.getElementById("st-name").addEventListener("input", (e) => { state.name = e.target.value; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); });
   document.getElementById("st-number").addEventListener("input", (e) => { state.number = e.target.value; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); });
   document.getElementById("st-class").addEventListener("change", (e) => { state.structureClass = e.target.value; scheduleUpdate(); });
-  document.getElementById("st-spancount").addEventListener("change", (e) => { state.spanCount = +e.target.value; scheduleUpdate(); });
+  document.getElementById("st-spancount").addEventListener("change", (e) => {
+    const n = Math.max(1, Math.min(MAX_SPANS, +e.target.value || 1));
+    const lost = state.spans.slice(n).filter((s) => s.components.length);
+    if (lost.length && !confirm(
+      `הקטנת מספר המפתחים ל-${n} תמחק לצמיתות את כל הרכיבים והפגמים של מפתח/ים ${lost.map((s) => s.id).join(", ")}. להמשיך?`
+    )) { e.target.value = state.spanCount; return; }
+    state.spanCount = n;
+    scheduleUpdate();
+  });
   document.getElementById("insp-class").addEventListener("change", (e) => { state.inspClass = e.target.value; scheduleUpdate(); });
   document.getElementById("insp-date").addEventListener("change", (e) => { state.inspDate = e.target.value; scheduleUpdate(); });
 
@@ -328,7 +336,12 @@ function init() {
     }
     else if (action === "comp-intact") {
       const f = findComp(compUid);
-      if (f) { f.comp.defects.push({ uid: nextUid(), family: null, def: null, sub: f.comp.subs[0].id, s: 1, ex: "A", note: "רכיב תקין", photo: "" }); scheduleUpdate(); }
+      if (f) {
+        const hasReal = f.comp.defects.some((d) => d.note !== "רכיב תקין");
+        if (hasReal && !confirm('סימון "רכיב תקין" ימחק את כל רשומות הפגם הקיימות ברכיב. להמשיך?')) return;
+        f.comp.defects = [{ uid: nextUid(), family: null, def: null, sub: f.comp.subs[0].id, s: 1, ex: "A", note: "רכיב תקין", photo: "" }];
+        scheduleUpdate();
+      }
     }
     else if (action === "sub-add") {
       const f = findComp(compUid);
