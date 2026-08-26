@@ -8,7 +8,7 @@
 - "הנחיות לביצוע סקירת גשרים, מנהרות ומבני דרך" — מהדורה 6-2019
 - "אוגדן חלוקה ומספור רכיבים" — מהדורה 1-2020
 
-**האתר החי:** https://hiyabh.github.io/bridge-score-calculator/
+**האתר החי:** https://yoelnadel-lang.github.io/bridge-score-calculator-pages/
 
 ## מה המחשבון עושה
 
