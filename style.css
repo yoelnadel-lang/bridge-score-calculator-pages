@@ -6,29 +6,52 @@
   --primary: #0b5394; --primary-light: #e8f0fa;
   --border: #d0d7de; --bg: #f6f8fa; --text: #1f2328;
   --danger: #c1121f; --ok: #1a7f37;
+  --panel-header-bg: #eef1f4; --grid-border: #c9ced3;
+  --select-bg: #cfe8fb; --select-border: #1f6fb2;
 }
 body {
   font-family: "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif;
   margin: 0; background: var(--bg); color: var(--text);
   direction: rtl; line-height: 1.55;
 }
-main { max-width: 1080px; margin: 0 auto; padding: 0 16px 40px; }
-
-.app-header {
-  background: var(--primary); color: #fff; padding: 20px 16px; text-align: center;
-}
-.app-header .logo {
-  display: block; margin: 0 auto 10px; height: 84px; background: #fff;
-  border-radius: 10px; padding: 6px 18px;
-}
-.app-header h1 { margin: 0 0 4px; font-size: 1.5rem; }
+main { max-width: 1200px; margin: 0 auto; padding: 0 14px 40px; }
 .print-header { display: none; }
-.subtitle { margin: 0 auto 12px; font-size: .85rem; opacity: .92; max-width: 760px; }
-.toolbar { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+
+/* --- מעטפת עליונה בסגנון מערכת ניהול נכסים (BMS) ---
+   הקונטיינר כולו sticky (ולא כל פס בנפרד עם היסט קבוע) — כך שאם סרגל
+   הכלים נשבר לכמה שורות ברוחב צר, הפסים לא נעלמים זה מתחת לזה. */
+.app-chrome { position: sticky; top: 0; z-index: 20; }
+
+.toolbar-bar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  gap: 8px; background: #fff; border-bottom: 1px solid var(--grid-border);
+  padding: 6px 14px;
+}
+.toolbar-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.toolbar-brand { display: flex; align-items: center; gap: 8px; }
+.brand-title { font-weight: 700; font-size: .95rem; color: var(--primary); }
+.logo-sm { height: 34px; border-radius: 4px; }
+
+.breadcrumb-bar {
+  background: var(--panel-header-bg); border-bottom: 1px solid var(--grid-border);
+  padding: 4px 14px; font-size: .78rem; color: #57606a;
+}
+
+.sec-tabs {
+  display: flex; flex-wrap: wrap; gap: 2px; background: #fff;
+  border-bottom: 1px solid var(--grid-border); padding: 0 10px;
+}
+.sec-tab {
+  border: none; border-bottom: 3px solid transparent; background: transparent;
+  padding: 9px 14px; font-size: .86rem; font-family: inherit; cursor: pointer;
+  color: #57606a;
+}
+.sec-tab:hover { color: var(--primary); background: var(--primary-light); }
+.sec-tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 700; }
 
 .btn {
   background: #fff; color: var(--primary); border: 1px solid var(--border);
-  border-radius: 8px; padding: 7px 14px; font-size: .9rem; cursor: pointer;
+  border-radius: 4px; padding: 6px 12px; font-size: .85rem; cursor: pointer;
   display: inline-flex; align-items: center; gap: 4px; font-family: inherit;
 }
 .btn:hover { background: var(--primary-light); }
@@ -37,11 +60,21 @@ main { max-width: 1080px; margin: 0 auto; padding: 0 16px 40px; }
 .btn-danger { color: var(--danger); }
 .btn-sm { padding: 3px 9px; font-size: .8rem; }
 
-.card {
-  background: #fff; border: 1px solid var(--border); border-radius: 12px;
-  padding: 18px 20px; margin: 18px 0; box-shadow: 0 1px 3px rgba(0,0,0,.05);
+/* --- פאנלים בסגנון BMS: מסגרת חדה, כותרת אפורה, קיפול אמיתי (details/summary) --- */
+.panel {
+  background: #fff; border: 1px solid var(--grid-border); border-radius: 2px;
+  margin: 12px 0;
 }
-.card h2 { margin: 0 0 14px; font-size: 1.15rem; color: var(--primary); }
+.panel-head {
+  list-style: none; cursor: pointer; user-select: none;
+  background: var(--panel-header-bg); border-bottom: 1px solid var(--grid-border);
+  padding: 7px 12px; font-size: .92rem; font-weight: 700; color: var(--text);
+  display: flex; align-items: center; gap: 6px;
+}
+.panel-head::-webkit-details-marker { display: none; }
+.panel-head::before { content: "▾"; font-size: .75rem; color: #57606a; }
+.panel:not([open]) .panel-head::before { content: "▸"; }
+.panel-body { padding: 14px 16px; }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; }
 @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } }
@@ -68,6 +101,36 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: 0
 .add-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
 .add-row .combo-host { flex: 1; min-width: 240px; }
 
+/* --- master-detail לרכיבים, בסגנון "Bridge Elements" / "Spans & Conditions" --- */
+.comp-split { display: flex; flex-direction: row-reverse; gap: 12px; align-items: flex-start; }
+@media (max-width: 860px) { .comp-split { flex-direction: column; } }
+
+.comp-master {
+  flex: 0 0 300px; max-width: 300px; border: 1px solid var(--grid-border);
+  border-radius: 2px; overflow: hidden;
+}
+@media (max-width: 860px) { .comp-master { flex-basis: auto; max-width: none; } }
+.comp-master-row {
+  display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+  font-size: .82rem; border: none; border-bottom: 1px solid var(--grid-border);
+  cursor: pointer; background: #fff; width: 100%; text-align: start;
+  font-family: inherit; color: inherit;
+}
+.comp-master-row:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.comp-master-row:last-child { border-bottom: none; }
+.comp-master-row:hover { background: var(--primary-light); }
+.comp-master-row.active { background: var(--select-bg); border-inline-start: 3px solid var(--select-border); }
+.comp-master-row.not-surveyed { opacity: .55; }
+.comp-master-row .cm-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comp-master-empty { padding: 16px 10px; color: #57606a; font-size: .85rem; text-align: center; }
+
+.comp-detail {
+  flex: 1 1 auto; min-width: 0; border: 1px solid var(--grid-border);
+  border-radius: 2px; padding: 12px 14px;
+}
+.comp-detail:empty { display: none; }
+.comp-detail-empty { color: #57606a; font-size: .9rem; text-align: center; padding: 30px 10px; }
+
 /* קומבו עם סינון בהקלדה */
 .combo { position: relative; display: block; }
 .combo-input { width: 100%; }
@@ -81,13 +144,9 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: 0
 .combo-item:hover, .combo-item.hi { background: var(--primary-light); }
 .combo-empty { padding: 8px 10px; color: #57606a; font-size: .85rem; font-weight: 400; }
 
-.comp {
-  border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px;
-  overflow: hidden;
-}
 .comp-head {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding: 10px 14px; background: var(--primary-light);
+  padding: 6px 0 12px; margin-bottom: 8px; border-bottom: 1px solid var(--grid-border);
 }
 .comp-head .comp-title { font-weight: 700; flex: 1; min-width: 200px; }
 .badge {
@@ -96,7 +155,7 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: 0
 }
 .badge-aux { background: #f6f8fa; color: #57606a; border-color: var(--border); }
 .badge-vh { background: #ffebe9; color: #cf222e; border-color: #ffcecb; }
-.comp-body { padding: 12px 14px; }
+.comp-body { padding: 0; }
 .comp.not-surveyed { opacity: .55; }
 
 .subs-table, .defects-table { width: 100%; border-collapse: collapse; font-size: .85rem; margin: 8px 0; }
@@ -125,9 +184,10 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: 0
 .score-row { display: flex; align-items: baseline; gap: 10px; margin: 6px 0; flex-wrap: wrap; }
 .score-meaning { font-size: .84rem; color: #333; margin-top: 6px; }
 .method-tag { font-size: .75rem; color: #57606a; }
-.spans-table { width: 100%; border-collapse: collapse; font-size: .87rem; margin-top: 14px; }
-.spans-table th, .spans-table td { border: 1px solid var(--border); padding: 6px 9px; text-align: center; }
-.spans-table th { background: var(--bg); }
+.spans-table { width: 100%; border-collapse: collapse; font-size: .82rem; margin-top: 14px; }
+.spans-table th, .spans-table td { border: 1px solid var(--grid-border); padding: 5px 8px; text-align: center; }
+.spans-table th { background: var(--panel-header-bg); }
+.spans-table tbody tr:hover { background: var(--primary-light); }
 .pill { display: inline-block; border-radius: 12px; padding: 1px 10px; color: #fff; font-size: .8rem; }
 
 /* תקציר מנהלים */
@@ -165,13 +225,16 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
 }
 #pdf-report h3 { margin: 14px 0 6px; font-size: .95rem; }
 
-/* הדפסה */
+/* הדפסה — הכל מוצג ללא תלות בטאב הפעיל.
+   הערה: קיפול <details> מיושם ע"י הדפדפן דרך ::details-content/content-visibility
+   ולא ניתן לביטול ב-CSS — לכן הפאנלים נפתחים ב-JS ב-beforeprint (ראה app.js). */
 @media print {
+  .panel[hidden] { display: block !important; }
   .no-print { display: none !important; }
   .print-header { display: block; text-align: center; margin-bottom: 8px; }
   .print-header img { height: 64px; }
   body { background: #fff; }
-  .card { box-shadow: none; border-color: #999; break-inside: avoid; }
+  .panel { box-shadow: none; border-color: #999; break-inside: avoid; }
   main { max-width: 100%; }
   #sec-results::before { content: "דוח הערכת מצב מבני — Condition PI"; display: block; font-size: 1.3rem; font-weight: 800; margin-bottom: 10px; }
 }

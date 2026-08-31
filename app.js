@@ -9,7 +9,8 @@ let uidCounter = 1;
 const nextUid = () => "u" + uidCounter++;
 
 let state = defaultState();
-const ui = { activeSpan: 1, openDefectForm: null, draft: null };
+const SEC_TABS = ["general", "components", "results", "summary"];
+const ui = { activeSpan: 1, activeTab: "general", activeComponent: null, openDefectForm: null, draft: null };
 
 function todayISO() {
   const d = new Date();
@@ -53,6 +54,11 @@ function syncSpanCount() {
   while (state.spans.length < n) state.spans.push({ id: state.spans.length + 1, dim: "", dimNote: "", components: [] });
   while (state.spans.length > n) state.spans.pop();
   if (ui.activeSpan > n) ui.activeSpan = 1;
+}
+// מוודא ש-ui.activeComponent מצביע על רכיב קיים במפתח הפעיל — נקרא בכל update()
+function syncActiveComponent() {
+  const comps = activeSpanObj().components;
+  if (!comps.some((c) => c.uid === ui.activeComponent)) ui.activeComponent = comps[0] ? comps[0].uid : null;
 }
 
 // --- הוספת רכיב מהקטלוג --- (מחזירה את ה-uid החדש; הרינדור באחריות הקורא)
@@ -195,6 +201,18 @@ function restoreFocus(f) {
 function update() {
   const focused = captureFocus();
   syncSpanCount();
+  syncActiveComponent();
+
+  document.getElementById("breadcrumb").innerHTML = renderBreadcrumb(state);
+  document.querySelectorAll("#sec-tabs .sec-tab").forEach((btn) => {
+    const active = btn.dataset.tab === ui.activeTab;
+    btn.classList.toggle("active", active);
+  });
+  const TAB_SECTION = { general: "sec-structure", components: "sec-components", results: "sec-results", summary: "sec-summary" };
+  for (const tab of SEC_TABS) {
+    document.getElementById(TAB_SECTION[tab]).hidden = tab !== ui.activeTab;
+  }
+
   document.getElementById("st-name").value = state.name;
   document.getElementById("st-number").value = state.number;
   document.getElementById("st-class").value = state.structureClass;
@@ -226,7 +244,8 @@ function update() {
     placeholder: "— בחר רכיב מהקטלוג (הקלד קוד או שם) —",
   });
   document.getElementById("span-tabs").innerHTML = renderSpanTabs(state, ui.activeSpan);
-  document.getElementById("comp-list").innerHTML = renderComponentList(activeSpanObj(), ui);
+  document.getElementById("comp-master").innerHTML = renderComponentMasterList(activeSpanObj(), ui);
+  document.getElementById("comp-detail").innerHTML = renderComponentDetail(activeSpanObj(), ui);
 
   let result = null, summary = null;
   if (hasAnyComponents()) {
@@ -268,9 +287,8 @@ function loadExample() {
       return comp;
     }),
   }));
-  state = st; ui.activeSpan = 1; ui.openDefectForm = null;
+  state = st; ui.activeSpan = 1; ui.activeComponent = null; ui.activeTab = "results"; ui.openDefectForm = null;
   update();
-  document.getElementById("sec-results").scrollIntoView({ behavior: "smooth" });
 }
 
 // --- מועד סקירה הבאה (מוצג בפרטי המבנה, מחושב מה-state) ---
@@ -327,7 +345,9 @@ function init() {
     const action = el.dataset.action;
     const compEl = el.closest("[data-comp]");
     const compUid = compEl ? compEl.dataset.comp : null;
-    if (action === "span-tab") { ui.activeSpan = +el.dataset.span; ui.openDefectForm = null; scheduleUpdate(); }
+    if (action === "span-tab") { ui.activeSpan = +el.dataset.span; ui.activeComponent = null; ui.openDefectForm = null; scheduleUpdate(); }
+    else if (action === "sec-tab") { ui.activeTab = el.dataset.tab; scheduleUpdate(); }
+    else if (action === "comp-select") { ui.activeComponent = compUid; ui.openDefectForm = null; scheduleUpdate(); }
     else if (action === "comp-remove") {
       const f = findComp(compUid);
       if (f && confirm(`למחוק את הרכיב "${f.comp.name}" על כל הפגמים שלו?`)) {
@@ -424,6 +444,7 @@ function init() {
       if (v) {
         Combobox.setValue("add-comp", "");
         const uid = addComponent(v);
+        if (uid) ui.activeComponent = uid;   // הרכיב החדש נבחר מיד ברשימת-האב
         scheduleUpdate(uid ? () => {
           const inp = document.querySelector(`[data-comp="${uid}"] input[data-action="sub-size"]`);
           if (inp) { inp.focus(); inp.select(); }
@@ -450,7 +471,20 @@ function init() {
   });
   document.getElementById("btn-print").addEventListener("click", () => window.print());
   document.getElementById("btn-reset").addEventListener("click", () => {
-    if (confirm("לאפס את כל הנתונים?")) { state = defaultState(); ui.activeSpan = 1; ui.openDefectForm = null; update(); }
+    if (confirm("לאפס את כל הנתונים?")) { state = defaultState(); ui.activeSpan = 1; ui.activeComponent = null; ui.activeTab = "general"; ui.openDefectForm = null; update(); }
+  });
+
+  // קיפול <details> מיושם דרך ::details-content ולא ניתן לביטול ב-CSS —
+  // לכן פותחים כל פאנל מקופל לפני הדפסה ומחזירים את מצבו אחריה, אחרת
+  // דוח מודפס של פאנל מקופל היה יוצא כותרת בלי תוכן.
+  let reopenAfterPrint = [];
+  window.addEventListener("beforeprint", () => {
+    reopenAfterPrint = [...document.querySelectorAll(".panel:not([open])")];
+    for (const p of reopenAfterPrint) p.open = true;
+  });
+  window.addEventListener("afterprint", () => {
+    for (const p of reopenAfterPrint) p.open = false;
+    reopenAfterPrint = [];
   });
 
   update();

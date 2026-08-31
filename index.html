@@ -9,79 +9,106 @@
 </head>
 <body>
 
-<header class="app-header no-print">
-  <img src="logo.jpeg" alt="מאיר ויואל — חברה להנדסה אזרחית" class="logo">
-  <h1>🌉 מחשבון ציוני מבנים — Condition PI</h1>
-  <p class="subtitle">חישוב הערכת מצב מבני לגשרים, מובלים, גשרי שילוט, קירות ומנהרות —
-  לפי "הנחיות להערכת המצב המבני" נתיבי ישראל, מהדורה 9-2019</p>
-  <div class="toolbar">
-    <button id="btn-example" class="btn">📂 טען דוגמה BR-11</button>
-    <button id="btn-pdf" class="btn">📄 ייצוא PDF</button>
-    <button id="btn-print" class="btn">🖨️ הדפסת דוח</button>
-    <button id="btn-reset" class="btn btn-danger">🗑️ איפוס</button>
+<!-- שלושת הפסים בקונטיינר סטיקי אחד — כך הם לא מתחבאים זה מתחת לזה
+     כשסרגל הכלים נשבר לכמה שורות ברוחב צר (היסטים קבועים היו שבירים) -->
+<div class="app-chrome no-print">
+  <div class="toolbar-bar">
+    <div class="toolbar-actions">
+      <button id="btn-example" class="btn">📂 טען דוגמה BR-11</button>
+      <button id="btn-pdf" class="btn">📄 ייצוא PDF</button>
+      <button id="btn-print" class="btn">🖨️ הדפסת דוח</button>
+      <button id="btn-reset" class="btn btn-danger">🗑️ איפוס</button>
+    </div>
+    <div class="toolbar-brand">
+      <span class="brand-title">🌉 מחשבון ציוני מבנים — Condition PI</span>
+      <img src="logo.jpeg" alt="מאיר ויואל — חברה להנדסה אזרחית" class="logo-sm">
+    </div>
   </div>
-</header>
+
+  <div class="breadcrumb-bar">
+    <span id="breadcrumb"></span>
+  </div>
+
+  <nav class="sec-tabs" id="sec-tabs" role="tablist">
+    <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="general">כללי</button>
+    <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="components">רכיבים ופגמים</button>
+    <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="results">תוצאות</button>
+    <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="summary">תקציר מנהלים</button>
+  </nav>
+</div>
 
 <main>
   <div class="print-header">
     <img src="logo.jpeg" alt="מאיר ויואל — חברה להנדסה אזרחית">
   </div>
-  <!-- שלב 1: הגדרת מבנה -->
-  <section class="card no-print" id="sec-structure">
-    <h2>1️⃣ פרטי המבנה</h2>
-    <div class="grid-2">
-      <label>שם המבנה
-        <input type="text" id="st-name" placeholder='למשל: גשר רכב מעל נחל שורק'>
-      </label>
-      <label>מספר המבנה
-        <input type="text" id="st-number" placeholder="S-BRG-00003900" dir="ltr">
-      </label>
-      <label>סיווג ראשי
-        <select id="st-class"></select>
-      </label>
-      <label id="wrap-supertype">סוג מבנה-על (טבלה 2)
-        <span id="st-supertype-combo"></span>
-      </label>
-      <label id="wrap-tunneltype" hidden>סוג המנהרה (טבלה 6)
-        <span id="st-tunneltype-combo"></span>
-      </label>
-      <label>מספר מפתחים / יחידות (עד 30)
-        <input type="number" id="st-spancount" min="1" max="30" value="1">
-      </label>
-      <label>סיווג המבנה לסקירה (טבלת תדירויות, סעיף 3.4)
-        <select id="insp-class"></select>
-      </label>
-      <label>תאריך הסקירה הנוכחית
-        <input type="date" id="insp-date">
-      </label>
+
+  <!-- כללי: פרטי המבנה -->
+  <details class="panel no-print" id="sec-structure" open>
+    <summary class="panel-head">פרטי המבנה</summary>
+    <div class="panel-body">
+      <div class="grid-2">
+        <label>שם המבנה
+          <input type="text" id="st-name" placeholder='למשל: גשר רכב מעל נחל שורק'>
+        </label>
+        <label>מספר המבנה
+          <input type="text" id="st-number" placeholder="S-BRG-00003900" dir="ltr">
+        </label>
+        <label>סיווג ראשי
+          <select id="st-class"></select>
+        </label>
+        <label id="wrap-supertype">סוג מבנה-על (טבלה 2)
+          <span id="st-supertype-combo"></span>
+        </label>
+        <label id="wrap-tunneltype" hidden>סוג המנהרה (טבלה 6)
+          <span id="st-tunneltype-combo"></span>
+        </label>
+        <label>מספר מפתחים / יחידות (עד 30)
+          <input type="number" id="st-spancount" min="1" max="30" value="1">
+        </label>
+        <label>סיווג המבנה לסקירה (טבלת תדירויות, סעיף 3.4)
+          <select id="insp-class"></select>
+        </label>
+        <label>תאריך הסקירה הנוכחית
+          <input type="date" id="insp-date">
+        </label>
+      </div>
+      <div id="insp-result" class="hint"></div>
+      <div id="span-dims"></div>
+      <p class="hint" id="span-rule-hint"></p>
     </div>
-    <div id="insp-result" class="hint"></div>
-    <div id="span-dims"></div>
-    <p class="hint" id="span-rule-hint"></p>
-  </section>
+  </details>
 
-  <!-- שלב 2: רכיבים ופגמים -->
-  <section class="card no-print" id="sec-components">
-    <h2>2️⃣ רכיבים ופגמים</h2>
-    <div id="span-tabs" class="tabs"></div>
-    <div class="add-row">
-      <div id="add-comp-combo" class="combo-host"></div>
+  <!-- רכיבים ופגמים: master-detail -->
+  <details class="panel no-print" id="sec-components" open>
+    <summary class="panel-head">רכיבים ופגמים</summary>
+    <div class="panel-body">
+      <div id="span-tabs" class="tabs"></div>
+      <div class="add-row">
+        <div id="add-comp-combo" class="combo-host"></div>
+      </div>
+      <p class="hint">בחירת רכיב מהרשימה מוסיפה אותו מיד למפתח הפעיל, ובוחרת אותו — אפשר להקליד קוד (למשל "12") או שם.</p>
+      <div class="comp-split">
+        <div id="comp-master" class="comp-master"></div>
+        <div id="comp-detail" class="comp-detail"></div>
+      </div>
     </div>
-    <p class="hint">בחירת רכיב מהרשימה מוסיפה אותו מיד למפתח הפעיל — אפשר להקליד קוד (למשל "12") או שם.</p>
-    <div id="comp-list"></div>
-  </section>
+  </details>
 
-  <!-- שלב 3: תוצאות -->
-  <section class="card" id="sec-results">
-    <h2 class="no-print">3️⃣ תוצאות</h2>
-    <div id="results"></div>
-  </section>
+  <!-- תוצאות -->
+  <details class="panel" id="sec-results" open>
+    <summary class="panel-head no-print">תוצאות</summary>
+    <div class="panel-body">
+      <div id="results"></div>
+    </div>
+  </details>
 
-  <!-- שלב 4: תקציר מנהלים -->
-  <section class="card" id="sec-summary">
-    <h2 class="no-print">4️⃣ תקציר מנהלים</h2>
-    <div id="summary"></div>
-  </section>
+  <!-- תקציר מנהלים -->
+  <details class="panel" id="sec-summary" open>
+    <summary class="panel-head no-print">תקציר מנהלים</summary>
+    <div class="panel-body">
+      <div id="summary"></div>
+    </div>
+  </details>
 
 </main>
 

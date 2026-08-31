@@ -11,6 +11,14 @@ function fmt(v, digits = 2) {
   return v == null || isNaN(v) ? "—" : (+v).toFixed(digits);
 }
 
+// --- breadcrumb עליון ---
+function renderBreadcrumb(state) {
+  const parts = ["🏠 מחשבון ציוני מבנים"];
+  parts.push(state.name ? esc(state.name) : "מבנה חדש");
+  if (state.number) parts.push(esc(state.number));
+  return parts.join(" &nbsp;›&nbsp; ");
+}
+
 // --- קטלוג הרכיבים כאפשרויות קומבו מקובצות ---
 // רכיבים דינמיים (1 ראשי / 3 משני) מוצגים עם הקוד מטבלה 2/6 לפי סוג המבנה
 // שנבחר — כך הקלדת "1.4" מביאה ישירות את "1.4 קורה ראשית".
@@ -176,10 +184,31 @@ function renderComponent(comp, ui) {
   </div>`;
 }
 
-function renderComponentList(span, ui) {
+// --- רשימת-אב (משמאל): שורה תמציתית לכל רכיב, בחירה מציגה את הפירוט מימין ---
+function renderComponentMasterList(span, ui) {
   if (!span || !span.components.length)
-    return '<p class="empty-note">אין רכיבים במפתח זה עדיין — בחר רכיב מהקטלוג למעלה והוסף.</p>';
-  return span.components.map((c) => renderComponent(c, ui)).join("");
+    return '<div class="comp-master-empty">אין רכיבים במפתח זה עדיין — בחר רכיב מהקטלוג למעלה.</div>';
+  return span.components.map((c) => {
+    const impLabel = c.importance ? IMPORTANCE[c.importance].label : "עזר";
+    const badgeCls = c.importance === "veryHigh" ? "badge-vh" : c.importance ? "" : "badge-aux";
+    const active = c.uid === ui.activeComponent;
+    // <button> ולא <div> — מילוי רציף במקלדת הוא עקרון מוביל בכלי הזה,
+    // ורשימת הרכיבים חייבת להיות נגישה ב-Tab ולא רק בעכבר
+    return `<button type="button" class="comp-master-row ${active ? "active" : ""} ${c.surveyed ? "" : "not-surveyed"}"
+      data-action="comp-select" data-comp="${c.uid}" aria-pressed="${active}">
+      <span class="cm-name">${esc(c.catalogId != null ? c.catalogId + ". " : "")}${esc(c.name)}</span>
+      <span class="badge ${badgeCls}">${esc(impLabel)}</span>
+    </button>`;
+  }).join("");
+}
+
+// --- פאנל פירוט (מימין): הרכיב הנבחר בלבד ---
+function renderComponentDetail(span, ui) {
+  // ההודעה על מפתח ריק מוצגת ברשימת-האב — כאן נשארים ריקים כדי לא לכפול אותה
+  if (!span || !span.components.length) return "";
+  const comp = span.components.find((c) => c.uid === ui.activeComponent);
+  if (!comp) return '<div class="comp-detail-empty">בחר רכיב מהרשימה משמאל כדי לערוך אותו.</div>';
+  return renderComponent(comp, ui);
 }
 
 // --- תוצאות ---
