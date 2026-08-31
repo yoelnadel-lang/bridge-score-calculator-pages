@@ -131,6 +131,12 @@ const Combobox = (() => {
     const combo = document.querySelector(`[data-combo-id="${CSS.escape(id)}"]`);
     if (!combo) return;
     const input = combo.querySelector(".combo-input");
+    // הבחירה בקומבו עשויה להפעיל פעולה שממקדת בעצמה שדה מסוים אחרי הרינדור
+    // (למשל הוספת רכיב, שמקפיצה למידת הרכיב החדש). הקריאה הזו רצה בטיימר
+    // מאוחר יותר — ובלי הבדיקה הזו היא הייתה גונבת בחזרה את הפוקוס לשדה הבא
+    // לפי סדר ה-DOM. אם משהו אחר כבר תפס את הפוקוס — מכבדים אותו.
+    const active = document.activeElement;
+    if (active && active !== input && active !== document.body && !combo.contains(active)) return;
     const focusables = [...document.querySelectorAll(
       'input:not([type="hidden"]), select, textarea, button, [tabindex]:not([tabindex="-1"])'
     )].filter((el) => !el.disabled && el.offsetParent !== null);
