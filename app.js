@@ -238,6 +238,11 @@ function requiredFindingsFor(structureClass) {
 // תיאור לא נערך) — כלומר בטוח להחליף אותה ברשימת ברירת המחדל של סוג אחר
 // בלי למחוק עבודה של הסוקר. משמש בשינוי סיווג המבנה.
 function isPristineFindingsList(list) {
+  // רשימה ריקה נחשבת "נקייה" גם היא — למשל מצב שמור ישן שנשמר לפני שהתכונה
+  // הזו נוספה (findingPhotos: []), או רכיב שכל שורותיו נמחקו — בלי זה שינוי
+  // סיווג לא היה יכול לעולם למלא אותה מחדש (list.every על מערך ריק true,
+  // אבל אף תבנית לא באורך 0, אז ההתאמה נכשלה תמיד).
+  if (list.length === 0) return true;
   if (!list.every((f) => !f.photo)) return false;
   const descs = list.map((f) => f.desc);
   return Object.values(REQUIRED_FINDINGS_BY_CLASS).some(
