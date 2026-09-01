@@ -37,6 +37,7 @@ function serializeForRecovery(state) {
     co: state.communicationNotes.map((n) => [n.uid, n.date, n.text]),
     ic: state.idCard,
     mp: state.idCardMainPhoto,
+    ia: [state.immediateAttention.text, state.immediateAttention.photo],
   };
 }
 
@@ -69,6 +70,9 @@ function deserializeFromRecovery(c) {
   st.communicationNotes = c.co.map(([uid, date, text]) => ({ uid, date, text }));
   st.idCard = c.ic || {};
   st.idCardMainPhoto = c.mp || "";
+  // תוספת אחרי הגרסה הראשונה — נשארת תואמת לאחור: קוד שהודפס לפני כן פשוט
+  // לא נושא את השדה, ולכן הוא נטען ריק במקום להיכשל.
+  st.immediateAttention = { text: (c.ia && c.ia[0]) || "", photo: (c.ia && c.ia[1]) || "" };
   return st;
 }
 

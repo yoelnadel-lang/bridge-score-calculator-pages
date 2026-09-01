@@ -87,7 +87,20 @@ const PdfExport = (() => {
       ["CPI Average", fmt(result.bridge.method_norm.cpiAv), "CPI Critical", fmt(result.bridge.cpiCrit)],
     ];
     const trs = rows.map(([l1, v1, l2, v2]) => `<tr><th>${l1}</th><td>${v1}</td><th>${l2}</th><td>${v2}</td></tr>`).join("");
-    return [`${govSectionTitle(1, "נתונים כלליים")}<table class="gov-kv">${trs}</table>`];
+    return [`${govSectionTitle(1, "נתונים כלליים")}<table class="gov-kv">${trs}</table>${immediateAttentionBlock(state)}`];
+  }
+
+  // תשומת לב מיידית — מוצג מודגש בעמוד הראשון, מיד מתחת לנתונים הכלליים,
+  // ורק אם מולא. זהו ליקוי דחוף ולכן הוא לא נדחק לסוף הדוח.
+  function immediateAttentionBlock(state) {
+    const ia = state.immediateAttention || { text: "", photo: "" };
+    const text = (ia.text || "").trim(), photo = (ia.photo || "").trim();
+    if (!text && !photo) return "";
+    return `<div class="gov-attention">
+      <div class="gov-attention-title">⚠ תשומת לב מיידית</div>
+      ${text ? `<div class="gov-attention-text">${esc(text)}</div>` : ""}
+      ${photo ? `<div class="gov-attention-codes">קוד תמונה: <span dir="ltr">${esc(photo)}</span></div>` : ""}
+    </div>`;
   }
 
   // ============================================================================
@@ -192,6 +205,13 @@ const PdfExport = (() => {
   // ============================================================================
   function collectPhotoItems(state, photoStore) {
     const items = [];
+    // תמונת "תשומת לב מיידית" ראשונה בנספח — היא הדחופה ביותר
+    for (const code of parsePhotoCodes((state.immediateAttention || {}).photo)) {
+      const entry = photoStore.get(code);
+      if (entry && entry.kind === "photo") {
+        items.push({ dataUrl: entry.dataUrl, filename: entry.filename, caption: "תשומת לב מיידית" });
+      }
+    }
     for (const span of state.spans) {
       for (const c of span.components) {
         for (const d of c.defects) {

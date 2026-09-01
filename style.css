@@ -207,6 +207,13 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 .spans-table th { background: var(--panel-header-bg); }
 .spans-table tbody tr:hover { background: var(--primary-light); }
 .pill { display: inline-block; border-radius: 12px; padding: 1px 10px; color: #fff; font-size: .8rem; }
+.audit-table td:first-child { text-align: right; }
+.audit-steps { margin: 6px 0 10px; padding-inline-start: 20px; font-size: .85rem; line-height: 1.7; }
+/* כרטיס נוסחה: כותרת עברית + נוסחה סימבולית + שורת הצבה עם הנתונים בפועל */
+.audit-formula { background: var(--bg); border: 1px solid var(--grid-border); border-radius: 6px; padding: 8px 10px; margin: 8px 0; }
+.audit-formula-title { font-weight: 700; font-size: .85rem; margin-bottom: 4px; }
+.audit-formula-eq { font-size: .85rem; color: #333; text-align: right; }
+.audit-formula-sub { font-size: .82rem; color: #57606a; margin-top: 3px; text-align: right; word-break: break-word; }
 
 /* תקציר מנהלים */
 .summary-block h3 { color: var(--primary); font-size: 1rem; margin: 16px 0 6px; }
@@ -282,6 +289,13 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
 .gov-photo-caption { border: 1px solid #999; padding: 2px 6px; font-size: 10px; margin-bottom: 4px; text-align: center; flex: 0 0 auto; }
 .gov-photo-img { flex: 1 1 auto; width: 100%; min-height: 0; object-fit: contain; }
 .gov-photo-filename { text-align: center; font-size: 10px; margin-top: 4px; direction: ltr; flex: 0 0 auto; }
+
+/* תשומת לב מיידית בדוח המודפס — מסגרת אדומה בולטת בעמוד הראשון.
+   pre-wrap שומר על שבירות השורה שהסוקר הקליד בטקסט החופשי. */
+.gov-attention { border: 2px solid #b00020; margin-top: 10px; padding: 6px 8px; flex: 0 0 auto; }
+.gov-attention-title { color: #b00020; font-weight: 700; font-size: 12px; margin-bottom: 4px; }
+.gov-attention-text { font-size: 11px; white-space: pre-wrap; }
+.gov-attention-codes { font-size: 10px; margin-top: 4px; }
 
 /* נספח קודי השחזור — שני קודים לעמוד, גדולים ככל שהעמוד מרשה.
    image-rendering:pixelated שומר על קצוות מודול חדים בהגדלה, מה שמשפר

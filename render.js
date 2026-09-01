@@ -118,6 +118,146 @@ function renderIdCardGroup(groupId, state, result) {
   return `<div class="grid-2">${auto}${editable}</div>`;
 }
 
+// ============================================================================
+// בקרה — פירוט מלא של שרשרת החישוב (S,Ex → ECS → ECF → ECI → EIF → SCS →
+// Condition PI) לכל רכיב, מפתח ומבנה, לצורך אימות ידני של הציון. מסך בלבד —
+// לא מודפס: הדוח המודפס כולל את מקטע [4] (סיכום כמויות וציוני ECS), שהוא
+// כבר בדיוק העמוד המקביל בדוח הרשמי של נתיבי ישראל ("Bridge Inspections",
+// עמ' 6) — טבלת ECS לכל רכיב ושורת סיכום SCS/CPI. אין צורך לשכפל אותו כאן.
+// ============================================================================
+function controlComponentRow(c) {
+  const impLabel = c.importance ? IMPORTANCE[c.importance].label : "רכיב עזר";
+  if (!c.surveyed) {
+    return `<tr class="hint"><td>${esc(c.name)}</td><td colspan="8">לא נסקר — לא נכלל בחישוב</td></tr>`;
+  }
+  if (c.aux) {
+    return `<tr><td>${esc(c.name)}</td><td>${impLabel}</td>
+      <td>${c.sMax}</td><td>${fmt(c.extent)}</td><td><strong>${fmt(c.ecs)}</strong></td>
+      <td colspan="4" class="hint">רכיב עזר — אין השפעה על הציון</td></tr>`;
+  }
+  const base = IMPORTANCE[c.importance].ecfBase;
+  return `<tr>
+    <td>${esc(c.name)}${c.defaulted ? ' <span class="hint">(ברירת מחדל 1A — אין רשומות פגם)</span>' : ""}</td>
+    <td>${impLabel}</td>
+    <td>${c.sMax}</td><td>${fmt(c.extent)}</td>
+    <td><strong>${fmt(c.ecs)}</strong></td>
+    <td>${fmt(base, 1)}</td>
+    <td>${fmt(c.ecf)}</td>
+    <td><strong>${fmt(c.eci)}</strong></td>
+    <td>${fmt(c.eif, 1)}</td>
+  </tr>`;
+}
+
+// כרטיס נוסחה: כותרת (עברית) + הנוסחה הסימבולית + שורת ההצבה עם הנתונים
+// בפועל. שתי השורות האחרונות ב-dir="ltr" — נוסחה עם משתנים לטיניים, "×"
+// ומספרים בהקשר RTL מתהפכת ויזואלית בלי זה (אותה בעיה שכבר תוקנה במקומות
+// אחרים באפליקציה לקודים כמו "4;99"). לא חצים משורשרים בתוך משפט עברי.
+function auditFormula(title, eq, sub) {
+  return `<div class="audit-formula">
+    <div class="audit-formula-title">${esc(title)}</div>
+    <div class="audit-formula-eq" dir="ltr">${eq}</div>
+    <div class="audit-formula-sub" dir="ltr">${sub}</div>
+  </div>`;
+}
+// שורת הצבה של ממוצע משוקלל: "(v1×w1 + v2×w2 + …) / (w1+w2+…) = result"
+function weightedAvgSubstitution(terms, vDigits, wDigits, result, rDigits) {
+  const num = terms.map((t) => `${fmt(t.v, vDigits)}×${fmt(t.w, wDigits)}`).join(" + ");
+  const den = terms.map((t) => fmt(t.w, wDigits)).join(" + ");
+  return `(${num}) / (${den}) = ${fmt(result, rDigits)}`;
+}
+// המרת SCS ל-Condition PI (משוואות 8.1/8.2) — כרטיס נוסחה עם הצבת המספר בפועל
+function cpiFormulaBlock(scs, cpiValue, title) {
+  if (scs == null) return "";
+  const raw = 100 - 2 * (scs * scs + 6.5 * scs - 7.5);
+  let html = auditFormula(title,
+    "Condition PI = 100 − 2 × (SCS² + 6.5 × SCS − 7.5)",
+    `100 − 2 × (${fmt(scs, 3)}² + 6.5 × ${fmt(scs, 3)} − 7.5) = ${fmt(raw)}`);
+  if (raw < 0 || raw > 100) html += `<p class="hint">חתוך לטווח 0–100 → ${fmt(cpiValue)}</p>`;
+  return html;
+}
+// SCSav (ממוצע משוקלל של ECI לפי EIF) ו-SCScrit (הרכיב הגרוע בחשיבות
+// "גבוהה מאוד") ליחידת חישוב אחת (מפתח בודד, או המבנה כולו כשהוא יחידה אחת)
+function renderUnitFormulas(unit) {
+  const scsAvTerms = unit.scored.map((c) => ({ v: c.eci, w: c.eif }));
+  let html = auditFormula("SCSav — ממוצע משוקלל של ECI לפי EIF",
+    "SCSav = Σ(ECIᵢ × EIFᵢ) / Σ EIFᵢ",
+    weightedAvgSubstitution(scsAvTerms, 2, 1, unit.scsAv, 3));
+  html += cpiFormulaBlock(unit.scsAv, unit.cpiAv, "CPIav");
+
+  const critical = unit.scored.filter((c) => c.importance === "veryHigh");
+  if (critical.length) {
+    html += auditFormula('SCScrit — הרכיב הגרוע ביותר בחשיבות "גבוהה מאוד"',
+      "SCScrit = max(ECI) על פני רכיבים בחשיבות גבוהה מאוד",
+      `max(${critical.map((c) => fmt(c.eci)).join(", ")}) = ${fmt(unit.scsCrit)}`);
+    html += cpiFormulaBlock(unit.scsCrit, unit.cpiCrit, "CPIcrit");
+  } else {
+    html += '<p class="hint">אין רכיב בחשיבות "גבוהה מאוד" — אין SCScrit.</p>';
+  }
+  return html;
+}
+
+function renderControlAudit(state, result) {
+  if (!result) return '<p class="empty-note">הבקרה תוצג אוטומטית לאחר הזנת רכיבים.</p>';
+  const dimLabel = STRUCTURE_CLASSES[state.structureClass].dimLabel;
+  const thead = `<tr><th>רכיב</th><th>חשיבות</th><th>S מקס'</th><th>Ext</th><th>ECS</th>
+    <th>ECF בסיס</th><th>ECF</th><th>ECI</th><th>EIF</th></tr>`;
+
+  let html = `<ol class="audit-steps">
+    <li>מחומרה (S) והיקף הנזק (Ext) של הפגמים מחושב <strong>ECS</strong> לכל רכיב (טבלה 11).</li>
+    <li>מ-ECS, לפי מקדם החשיבות של הרכיב, מחושב <strong>ECF</strong> (טבלה 12).</li>
+    <li><strong>ECI</strong> = ECS − ECF (משוואה 5).</li>
+    <li>לפי אותו מקדם חשיבות נקבע גם <strong>EIF</strong> (טבלה 13).</li>
+    <li>רכיבי המפתח משוקללים יחד לציון <strong>SCS</strong>.</li>
+    <li>ה-SCS מומר לציון <strong>Condition PI</strong> (משוואות 8.1–8.2).</li>
+  </ol>
+  <p class="hint">המסך הזה אינו מודפס במלואו — הדוח המודפס כולל את מקטע [4] (סיכום כמויות וציוני ECS),
+    שהוא כבר העמוד המקביל בדוח הרשמי של נתיבי ישראל.</p>`;
+
+  state.spans.forEach((span, i) => {
+    const comps = result.spans[i].comps;
+    if (!comps.length) return;
+    const label = state.spanCount > 1 ? `מפתח ${span.id} (${fmt(span.dim, 2)} ${esc(dimLabel)})` : `מפתח ${span.id}`;
+    html += `<h3>${label}</h3>
+      <table class="spans-table audit-table">${thead}<tbody>${comps.map(controlComponentRow).join("")}</tbody></table>`;
+    const unit = result.spans[i].unit;
+    if (unit) html += renderUnitFormulas(unit);
+  });
+
+  if (result.singleUnit) {
+    html += `<h3>שילוב לרמת המבנה</h3>
+      <p class="hint">מבנה בעל מפתח אחד או שניים — כל הרכיבים לעיל נסקרים ומחושבים כיחידה אחת (משוואה 6.1).</p>`;
+    html += renderUnitFormulas(result.unit);
+  } else {
+    html += `<h3>שילוב מפתחות לרמת המבנה (משוואה 6.2)</h3>
+      <table class="spans-table audit-table">
+        <tr><th>מפתח</th><th>${esc(dimLabel)}</th><th>SCSav</th><th>CPIav</th></tr>
+        ${result.spans.map((s) => `<tr><td>מפתח ${s.id}</td><td>${fmt(s.dim, 1)}</td>
+          <td>${fmt(s.unit.scsAv, 3)}</td><td>${fmt(s.unit.cpiAv)}</td></tr>`).join("")}
+      </table>`;
+
+    const withScore = result.spans.filter((s) => s.unit.scsAv != null && s.dim > 0);
+    const normTerms = withScore.map((s) => ({ v: s.unit.scsAv, w: s.dim }));
+    html += auditFormula("שיטת הנוהל — שקלול SCSav לפי מימד (משוואה 6.2)",
+      `SCSavW = Σ(SCSavᵢ × ${esc(dimLabel)}ᵢ) / Σ ${esc(dimLabel)}ᵢ`,
+      weightedAvgSubstitution(normTerms, 3, 1, result.bridge.method_norm.scsAv, 3));
+    html += cpiFormulaBlock(result.bridge.method_norm.scsAv, result.bridge.method_norm.cpiAv, "CPIav (לפי הנוהל)");
+
+    const filesTerms = withScore.map((s) => ({ v: s.unit.cpiAv, w: s.dim }));
+    html += auditFormula("שיטת הקבצים הקיימים — שקלול CPIav לפי מימד (להשוואה בלבד)",
+      `CPIavW = Σ(CPIavᵢ × ${esc(dimLabel)}ᵢ) / Σ ${esc(dimLabel)}ᵢ`,
+      weightedAvgSubstitution(filesTerms, 2, 1, result.bridge.method_files.cpiAv, 2));
+
+    const critSpans = result.spans.filter((s) => s.unit.scsCrit != null);
+    if (critSpans.length) {
+      html += auditFormula("SCScrit — המפתח הגרוע ביותר",
+        "SCScrit = max(SCScritᵢ) על פני המפתחים",
+        `max(${critSpans.map((s) => `מפתח ${s.id}: ${fmt(s.unit.scsCrit)}`).join(", ")}) = ${fmt(result.bridge.scsCrit)}`);
+      html += cpiFormulaBlock(result.bridge.scsCrit, result.bridge.cpiCrit, "CPIcrit");
+    }
+  }
+  return html;
+}
+
 // --- קטלוג הרכיבים כאפשרויות קומבו מקובצות ---
 // רכיבים דינמיים (1 ראשי / 3 משני) מוצגים עם הקוד מטבלה 2/6 לפי סוג המבנה
 // שנבחר — כך הקלדת "1.4" מביאה ישירות את "1.4 קורה ראשית".

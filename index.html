@@ -51,6 +51,7 @@
     <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="results">תוצאות</button>
     <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="summary">תקציר מנהלים</button>
     <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="idcard">ת.ז</button>
+    <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="control">בקרה</button>
   </nav>
 </div>
 
@@ -112,6 +113,22 @@
       <div id="insp-result" class="hint"></div>
       <div id="span-dims"></div>
       <p class="hint" id="span-rule-hint"></p>
+    </div>
+  </details>
+
+  <!-- תשומת לב מיידית: ליקוי דחוף שדורש טיפול/דיווח מיידי. מוצג בלשונית
+       "כללי" מתחת לפרטי המבנה, ומודגש בראש העמוד הראשון של דוח הסקירה. -->
+  <details class="panel no-print" id="sec-attention" open>
+    <summary class="panel-head">תשומת לב מיידית</summary>
+    <div class="panel-body">
+      <p class="hint">ליקוי או מצב הדורש טיפול או דיווח מיידי. אם ימולא — יופיע מודגש בראש דוח הסקירה.</p>
+      <label>תיאור
+        <textarea id="ia-text" rows="4" placeholder="תיאור הליקוי הדחוף והפעולה הנדרשת"></textarea>
+      </label>
+      <label style="max-width:320px">קוד תמונה
+        <input type="text" id="ia-photo" placeholder="קוד תמונה, אפשר כמה מופרדים ב-;" dir="ltr">
+      </label>
+      <p>סטטוס: <span id="ia-photo-status"></span></p>
     </div>
   </details>
 
@@ -219,6 +236,15 @@
       </label>
       <div id="idcard-tabs" class="tabs"></div>
       <div id="idcard-fields"></div>
+    </div>
+  </details>
+
+  <!-- בקרה: פירוט מלא של שרשרת החישוב לאימות הציון — לא מודפס. הדוח המודפס
+       כבר כולל את מקטע [4] (סיכום כמויות וציוני ECS), המקביל לעמוד הרשמי. -->
+  <details class="panel no-print" id="sec-control" open>
+    <summary class="panel-head">בקרה</summary>
+    <div class="panel-body">
+      <div id="control-audit"></div>
     </div>
   </details>
 

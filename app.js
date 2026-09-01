@@ -12,12 +12,14 @@ let state = defaultState();
 // סדר לפי מסך "סקירות לגשרים" ב-BMS: כללי · שינויים · ממצאים · רכיבים ·
 // סוקר · מהנדס · תרשימים · תקשורת — ואחריהם תוצאות ותקציר מנהלים, שאין
 // להם מקבילה ב-BMS.
-const SEC_TABS = ["general", "changes", "findings", "components", "surveyor", "engineer", "drawings", "communication", "results", "summary", "idcard"];
+const SEC_TABS = ["general", "changes", "findings", "components", "surveyor", "engineer", "drawings", "communication", "results", "summary", "idcard", "control"];
+// לשונית יכולה להציג יותר מפאנל אחד — "כללי" מציגה את פרטי המבנה ומתחתיהם
+// את "תשומת לב מיידית".
 const TAB_SECTION = {
-  general: "sec-structure", changes: "sec-changes", findings: "sec-findings",
-  components: "sec-components", surveyor: "sec-surveyor", engineer: "sec-engineer",
-  drawings: "sec-drawings", communication: "sec-communication",
-  results: "sec-results", summary: "sec-summary", idcard: "sec-idcard",
+  general: ["sec-structure", "sec-attention"], changes: ["sec-changes"], findings: ["sec-findings"],
+  components: ["sec-components"], surveyor: ["sec-surveyor"], engineer: ["sec-engineer"],
+  drawings: ["sec-drawings"], communication: ["sec-communication"],
+  results: ["sec-results"], summary: ["sec-summary"], idcard: ["sec-idcard"], control: ["sec-control"],
 };
 // רשימות הערות חופשיות (תאריך+טקסט) המשותפות לכמה לשוניות — data-list בכל
 // שורה קובע לאיזו מהן היא שייכת, כך שמטפל אירועים אחד משרת את כולן.
@@ -45,6 +47,7 @@ function collectMissingPhotoCodes() {
       for (const d of c.defects) for (const code of parsePhotoCodes(d.photo)) codes.add(code);
   for (const f of state.findingPhotos) for (const code of parsePhotoCodes(f.photo)) codes.add(code);
   for (const sk of state.sketches) if (sk.code && sk.code.trim()) codes.add(sk.code.trim());
+  for (const code of parsePhotoCodes(state.immediateAttention.photo)) codes.add(code);
   if (state.idCardMainPhoto && state.idCardMainPhoto.trim()) codes.add(state.idCardMainPhoto.trim());
   return [...codes].filter((code) => !photoStore.has(code));
 }
@@ -223,6 +226,7 @@ function defaultState() {
     name: "", number: "", structureClass: "BRG", superType: 4, tunnelType: null,
     inspClass: "", inspDate: todayISO(), prevInspDate: "",
     surveyorName: "", companyName: "",
+    immediateAttention: { text: "", photo: "" },
     findingPhotos: [], sketches: [],
     changeNotes: [], surveyorNotes: [], engineerNotes: [], communicationNotes: [],
     idCard: {}, idCardMainPhoto: "",
@@ -235,6 +239,10 @@ function migrateState(s) {
   const out = { ...defaultState(), ...s };
   if (!out.inspDate) out.inspDate = todayISO();
   if (out.inspClass == null) out.inspClass = "";
+  // ניגשים אליו כאובייקט בכמה מקומות — הגנה מפני מצב שמור שנשמר לפני שהשדה נוסף
+  if (!out.immediateAttention || typeof out.immediateAttention !== "object") {
+    out.immediateAttention = { text: "", photo: "" };
+  }
   out.spans = (out.spans || []).map((sp) => ({
     dimNote: "", ...sp,
     components: (sp.components || []).map((c) => ({
@@ -414,7 +422,8 @@ function update() {
     btn.classList.toggle("active", active);
   });
   for (const tab of SEC_TABS) {
-    document.getElementById(TAB_SECTION[tab]).hidden = tab !== ui.activeTab;
+    const hidden = tab !== ui.activeTab;
+    for (const id of TAB_SECTION[tab]) document.getElementById(id).hidden = hidden;
   }
 
   document.getElementById("st-name").value = state.name;
@@ -437,13 +446,18 @@ function update() {
   document.getElementById("insp-class").value = state.inspClass;
   document.getElementById("insp-date").value = state.inspDate;
   document.getElementById("prev-insp-date").value = state.prevInspDate;
+  // שדות סטטיים (לא נבנים מחדש) — כך הסמן לא קופץ באמצע הקלדה בטקסט חופשי
+  document.getElementById("ia-text").value = state.immediateAttention.text;
+  document.getElementById("ia-photo").value = state.immediateAttention.photo;
+  document.getElementById("ia-photo-status").innerHTML =
+    photoCodesCell(photoStore, state.immediateAttention.photo) || '<span class="hint">לא נרשם קוד</span>';
   updateInspection();
   document.getElementById("wrap-supertype").hidden = !(state.structureClass === "BRG" || state.structureClass === "CLV");
   document.getElementById("wrap-tunneltype").hidden = state.structureClass !== "TUN";
   document.getElementById("span-dims").innerHTML = renderSpanDims(state);
   document.getElementById("span-rule-hint").textContent =
     state.spanCount <= 2
-      ? "מבנה בעל מפתח אחד או שניים נסקר ומחושב כיחידה אחת (משוואה 6.1) — אין צורך במימדי שקלול."
+      ? ""
       : "מבנה בעל 3 מפתחים ומעלה: ציון לכל מפתח בנפרד ושקלול לפי המימד (משוואה 6.2). הזן מימד לכל מפתח.";
 
   document.getElementById("finding-photos").innerHTML = renderFindingPhotos(state, photoStore);
@@ -465,6 +479,7 @@ function update() {
   document.getElementById("idcard-tabs").innerHTML = renderIdCardTabs(ui.idCardTab);
   document.getElementById("idcard-fields").innerHTML = renderIdCardGroup(ui.idCardTab, state, result);
   document.getElementById("idcard-photo").value = state.idCardMainPhoto;
+  document.getElementById("control-audit").innerHTML = renderControlAudit(state, result);
 
   document.getElementById("add-comp-combo").innerHTML = Combobox.html({
     id: "add-comp", action: "add-comp", options: componentComboOptions(state),
@@ -555,6 +570,18 @@ function init() {
   document.getElementById("st-number").addEventListener("input", (e) => { state.number = e.target.value; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); });
   document.getElementById("st-surveyor").addEventListener("input", (e) => { state.surveyorName = e.target.value; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); });
   document.getElementById("st-company").addEventListener("input", (e) => { state.companyName = e.target.value; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); });
+  // "תשומת לב מיידית" — שדות סטטיים, לכן שמירה ישירה בלי רינדור מלא (הסמן
+  // בטקסט ארוך היה קופץ). רק תגיות הסטטוס של קוד התמונה מתרעננות בנפרד.
+  document.getElementById("ia-text").addEventListener("input", (e) => {
+    state.immediateAttention.text = e.target.value;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  });
+  document.getElementById("ia-photo").addEventListener("input", (e) => {
+    state.immediateAttention.photo = e.target.value;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    document.getElementById("ia-photo-status").innerHTML =
+      photoCodesCell(photoStore, e.target.value) || '<span class="hint">לא נרשם קוד</span>';
+  });
   document.getElementById("st-class").addEventListener("change", (e) => { state.structureClass = e.target.value; scheduleUpdate(); });
   document.getElementById("st-spancount").addEventListener("change", (e) => {
     const n = Math.max(1, Math.min(MAX_SPANS, +e.target.value || 1));
