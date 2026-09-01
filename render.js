@@ -19,6 +19,105 @@ function renderBreadcrumb(state) {
   return parts.join(" &nbsp;›&nbsp; ");
 }
 
+// --- תגית סטטוס לקוד תמונה/סקיצה אחד: ירוק אם צורף קובץ תואם, אפור אם לא ---
+function photoChip(photoStore, code) {
+  const ok = photoStore.has(code);
+  return `<span class="photo-chip ${ok ? "ok" : "missing"}" title="${ok ? "צורף" : "לא צורף עדיין"}">${esc(code)}</span>`;
+}
+function photoCodesCell(photoStore, photoField) {
+  const codes = parsePhotoCodes(photoField);
+  // dir="ltr" — בלי זה סדר הקודים מתהפך ויזואלית בתוך הקשר RTL (למשל "4;99")
+  return codes.length ? `<span dir="ltr">${codes.map((c) => photoChip(photoStore, c)).join(" ")}</span>` : "";
+}
+
+// --- תיעוד ממצאים: תמונות תיעוד כלליות, לא קשורות לרכיב ספציפי ---
+function renderFindingPhotos(state, photoStore) {
+  const rows = state.findingPhotos.map((f) => `<tr>
+    <td><input type="text" value="${esc(f.desc)}" data-action="finding-desc" data-finding="${f.uid}" placeholder="למשל: תמונה כללית"></td>
+    <td><input type="text" value="${esc(f.photo)}" data-action="finding-photo" data-finding="${f.uid}" placeholder="קוד תמונה, אפשר כמה מופרדים ב-;" dir="ltr"></td>
+    <td>${photoCodesCell(photoStore, f.photo)}</td>
+    <td><button class="btn btn-sm btn-danger" data-action="finding-remove" data-finding="${f.uid}">✕</button></td>
+  </tr>`).join("");
+  return `<table class="subs-table"><tr><th>תיאור</th><th>קוד תמונה</th><th>סטטוס</th><th></th></tr>${rows}</table>
+    <button class="btn btn-sm" data-action="finding-add">➕ הוסף שורת תיעוד</button>`;
+}
+
+// --- סקיצות: מיפוי קוד סקיצה לכותרת שתופיע בנספח התרשימים ---
+function renderSketches(state, photoStore) {
+  const rows = state.sketches.map((s) => {
+    const code = (s.code || "").trim();
+    return `<tr>
+      <td><input type="text" value="${esc(s.code)}" data-action="sketch-code" data-sketch="${s.uid}" placeholder="001" dir="ltr"></td>
+      <td><input type="text" value="${esc(s.caption)}" data-action="sketch-caption" data-sketch="${s.uid}" placeholder="למשל: תנוחה"></td>
+      <td>${code ? photoChip(photoStore, code) : ""}</td>
+      <td><button class="btn btn-sm btn-danger" data-action="sketch-remove" data-sketch="${s.uid}">✕</button></td>
+    </tr>`;
+  }).join("");
+  return `<table class="subs-table"><tr><th>קוד סקיצה</th><th>כותרת</th><th>סטטוס</th><th></th></tr>${rows}</table>
+    <button class="btn btn-sm" data-action="sketch-add">➕ הוסף סקיצה</button>`;
+}
+
+// --- טבלת הערות חופשיות (תאריך + טקסט) — משותפת ל-שינויים/סוקר/מהנדס/תקשורת ---
+function renderNotesTable(notes, listKey) {
+  const rows = notes.map((n) => `<tr>
+    <td><input type="date" value="${esc(n.date)}" data-action="note-date" data-list="${listKey}" data-note="${n.uid}"></td>
+    <td><input type="text" value="${esc(n.text)}" data-action="note-text" data-list="${listKey}" data-note="${n.uid}" placeholder="הערה חופשית"></td>
+    <td><button class="btn btn-sm btn-danger" data-action="note-remove" data-list="${listKey}" data-note="${n.uid}">✕</button></td>
+  </tr>`).join("");
+  return `<table class="subs-table"><tr><th>תאריך</th><th>הערה</th><th></th></tr>${rows}</table>
+    <button class="btn btn-sm" data-action="note-add" data-list="${listKey}">➕ הוסף הערה</button>`;
+}
+
+// ============================================================================
+// תעודת זהות לגשר ומובל (ת.ז) — מהדורה 6-2008
+// ============================================================================
+function renderIdCardTabs(activeGroup) {
+  return ID_CARD_GROUPS.map((g) =>
+    `<button class="tab ${g.id === activeGroup ? "active" : ""}" data-action="idcard-tab" data-group="${g.id}">${esc(g.label)}</button>`
+  ).join("");
+}
+
+// שדות שנמשכים אוטומטית מלשוניות אחרות — תצוגה בלבד, לפי הקבוצה הפעילה
+// (סעיף 1/2 ב"כללי", סעיף 4 ב"נתונים גיאומטריים", סעיפים 10/13 ב"מדדי מצב").
+function idCardAutoFields(groupId, state, result) {
+  if (groupId === "general") {
+    return [
+      { code: "1.1", label: "מספר המבנה", value: state.number },
+      { code: "1.2", label: "שם המבנה", value: state.name },
+      { code: "2.1", label: "קבוצת סווג ראשית", value: state.structureClass },
+    ];
+  }
+  if (groupId === "geometry") {
+    return [{ code: "4.1", label: "מספר מפתחים", value: state.spanCount }];
+  }
+  if (groupId === "indices") {
+    const freq = state.inspClass !== "" && state.inspClass != null ? INSPECTION_FREQUENCIES[+state.inspClass] : null;
+    return [
+      { code: "10.1", label: "Condition PIav", value: result ? fmt(result.bridge.method_norm.cpiAv) : "—" },
+      { code: "10.2", label: "Condition PIcrit", value: result ? fmt(result.bridge.cpiCrit) : "—" },
+      { code: "13.1", label: "סיווג לסקירה", value: freq ? freq.label : "—" },
+      { code: "13.2", label: "תאריך ביצוע סקירה (קודמת)", value: state.prevInspDate || "—" },
+      { code: "13.3", label: "תאריך ביצוע סקירה (נוכחית)", value: state.inspDate || "—" },
+      { code: "13.4", label: "תדירות ביצוע סקירה שגרתית [חודש]", value: DEFAULT_NEXT_INSPECTION_MONTHS },
+    ];
+  }
+  return [];
+}
+
+function renderIdCardGroup(groupId, state, result) {
+  const group = ID_CARD_GROUPS.find((g) => g.id === groupId) || ID_CARD_GROUPS[0];
+  const auto = idCardAutoFields(groupId, state, result).map(({ code, label, value }) => `
+    <label>${esc(code)} ${esc(label)} <span class="hint">(נמשך אוטומטית)</span>
+      <input type="text" value="${esc(value)}" readonly>
+    </label>`).join("");
+  const editable = group.fields.map((f) => `
+    <label>${esc(f.code)} ${esc(f.label)}
+      <input type="${f.type === "date" ? "date" : "text"}" value="${esc(state.idCard[f.code] || "")}"
+        data-action="idcard-field" data-code="${esc(f.code)}">
+    </label>`).join("");
+  return `<div class="grid-2">${auto}${editable}</div>`;
+}
+
 // --- קטלוג הרכיבים כאפשרויות קומבו מקובצות ---
 // רכיבים דינמיים (1 ראשי / 3 משני) מוצגים עם הקוד מטבלה 2/6 לפי סוג המבנה
 // שנבחר — כך הקלדת "1.4" מביאה ישירות את "1.4 קורה ראשית".
@@ -121,7 +220,8 @@ function renderDefectForm(comp, draft) {
     ${+draft.s === 5 ? '<p class="warn">חומרה 5 = כשל: הרכיב יקבל ECS = 5.0 ללא תלות בהיקף</p>' : ""}
     <div class="grid-2">
       <label>הערות / מידות הפגם <input type="text" data-action="draft-note" value="${esc(draft.note)}"></label>
-      <label>קוד תמונה <input type="text" data-action="draft-photo" value="${esc(draft.photo)}"></label>
+      <label>קוד תמונה <input type="text" data-action="draft-photo" value="${esc(draft.photo)}" dir="ltr"
+        placeholder="למשל 14 — כמה תמונות: 14;153"></label>
     </div>
     ${errors.length ? `<p class="error-text">⚠ ${errors.map(esc).join(" · ")}</p>` : ""}
     <div class="add-row" style="margin:8px 0 0">
@@ -132,7 +232,7 @@ function renderDefectForm(comp, draft) {
 }
 
 // --- כרטיס רכיב ---
-function renderComponent(comp, ui) {
+function renderComponent(comp, ui, photoStore) {
   const impLabel = comp.importance ? IMPORTANCE[comp.importance].label : "רכיב עזר";
   const badgeCls = comp.importance === "veryHigh" ? "badge-vh" : comp.importance ? "" : "badge-aux";
   const defectRows = comp.defects.map((d) => {
@@ -142,6 +242,9 @@ function renderComponent(comp, ui) {
       <td>${esc(cat ? cat.name_he : d.note === "רכיב תקין" ? "רכיב תקין" : "")}</td>
       <td>${d.sub}</td><td>${d.s}</td><td>${esc(d.ex)}</td>
       <td>${esc(d.note || "")}</td>
+      <td><input type="text" class="note-input" value="${esc(d.photo)}" data-action="defect-photo" data-defect="${d.uid}"
+        placeholder="קוד, אפשר כמה מופרדים ב-;" dir="ltr" style="width:110px"></td>
+      <td>${photoCodesCell(photoStore, d.photo)}</td>
       <td><button class="btn btn-sm btn-danger" data-action="defect-remove" data-defect="${d.uid}">✕</button></td>
     </tr>`;
   }).join("");
@@ -176,7 +279,7 @@ function renderComponent(comp, ui) {
         <button class="btn btn-sm" data-action="sub-add">➕ תת-רכיב</button>
       </div>
       ${comp.defects.length ? `<table class="defects-table">
-        <tr><th>קוד</th><th>פגם</th><th>תת-רכיב</th><th>S</th><th>Ex</th><th>הערות</th><th></th></tr>
+        <tr><th>קוד</th><th>פגם</th><th>תת-רכיב</th><th>S</th><th>Ex</th><th>הערות</th><th>קוד תמונה</th><th>סטטוס</th><th></th></tr>
         ${defectRows}</table>` : '<p class="hint">אין רשומות פגם — רכיב ללא רשומות יחושב כתקין (1A) ויסומן בתקציר.</p>'}
       ${formOpen ? renderDefectForm(comp, ui.draft) : `<button class="btn btn-sm btn-primary" data-action="defect-open">➕ הוסף פגם</button>`}
       ${!comp.surveyed ? '<p class="warn">רכיב מסומן "לא ניתן לסקירה" — לא ייכלל בחישוב הציון</p>' : ""}
@@ -203,12 +306,12 @@ function renderComponentMasterList(span, ui) {
 }
 
 // --- פאנל פירוט (מימין): הרכיב הנבחר בלבד ---
-function renderComponentDetail(span, ui) {
+function renderComponentDetail(span, ui, photoStore) {
   // ההודעה על מפתח ריק מוצגת ברשימת-האב — כאן נשארים ריקים כדי לא לכפול אותה
   if (!span || !span.components.length) return "";
   const comp = span.components.find((c) => c.uid === ui.activeComponent);
   if (!comp) return '<div class="comp-detail-empty">בחר רכיב מהרשימה משמאל כדי לערוך אותו.</div>';
-  return renderComponent(comp, ui);
+  return renderComponent(comp, ui, photoStore);
 }
 
 // --- תוצאות ---

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>מחשבון ציוני מבנים — Condition PI (נתיבי ישראל)</title>
 <link rel="stylesheet" href="style.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌉</text></svg>">
+<link rel="icon" href="logo.jpeg" type="image/jpeg">
 </head>
 <body>
 
@@ -15,12 +15,19 @@
   <div class="toolbar-bar">
     <div class="toolbar-actions">
       <button id="btn-example" class="btn">📂 טען דוגמה BR-11</button>
-      <button id="btn-pdf" class="btn">📄 ייצוא PDF</button>
+      <button id="btn-attach" class="btn" title="שליפת קבצי תמונות/סקיצות מתיקיית הגשר, לפי הקוד שנרשם בכל שורה">📎 הוסף קבצים מצורפים</button>
+      <button id="btn-attach-files" class="btn btn-sm" title="גיבוי לדפדפנים שלא תומכים בבחירת תיקייה שלמה">בחירת קבצים בודדים</button>
+      <input type="file" id="attach-dir-input" webkitdirectory multiple hidden>
+      <input type="file" id="attach-files-input" multiple hidden accept="image/*">
+      <button id="btn-pdf-report" class="btn">📄 ייצוא דוח סקירה</button>
+      <button id="btn-pdf-summary" class="btn">📊 ייצוא תקציר מנהלים</button>
+      <button id="btn-pdf-idcard" class="btn">🪪 ייצוא ת.ז</button>
+      <button id="btn-scan-qr" class="btn" title="שחזור נתונים מקוד QR שהודפס בדוח קודם — לא כולל תמונות">📷 שחזור מ-QR</button>
       <button id="btn-print" class="btn">🖨️ הדפסת דוח</button>
       <button id="btn-reset" class="btn btn-danger">🗑️ איפוס</button>
     </div>
     <div class="toolbar-brand">
-      <span class="brand-title">🌉 מחשבון ציוני מבנים — Condition PI</span>
+      <span class="brand-title">דו"ח סקירה</span>
       <img src="logo.jpeg" alt="מאיר ויואל — חברה להנדסה אזרחית" class="logo-sm">
     </div>
   </div>
@@ -29,12 +36,39 @@
     <span id="breadcrumb"></span>
   </div>
 
+  <!-- סדר הטאבים לפי מסך "סקירות לגשרים" ב-BMS (שקופית 21-22):
+       כללי · שינויים · ממצאים · רכיבים · סוקר · מהנדס · תרשימים · תקשורת —
+       ואחריהם תוצאות ותקציר מנהלים, שאין להם מקבילה ב-BMS ונשארים בסוף. -->
   <nav class="sec-tabs" id="sec-tabs" role="tablist">
     <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="general">כללי</button>
-    <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="components">רכיבים ופגמים</button>
+    <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="changes">שינויים</button>
+    <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="findings">ממצאים</button>
+    <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="components">רכיבים</button>
+    <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="surveyor">סוקר</button>
+    <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="engineer">מהנדס</button>
+    <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="drawings">תרשימים</button>
+    <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="communication">תקשורת</button>
     <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="results">תוצאות</button>
     <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="summary">תקציר מנהלים</button>
+    <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="idcard">ת.ז</button>
   </nav>
+</div>
+
+<!-- שחזור נתונים מקוד QR — מצלמה או תמונה שהועלתה; לא כולל תמונות מצורפות -->
+<div id="qr-scan-panel" class="qr-scan-panel no-print" hidden>
+  <div class="qr-scan-box">
+    <div class="qr-scan-head">
+      <strong>📷 שחזור נתונים מקוד QR</strong>
+      <button id="qr-scan-close" class="btn btn-sm" type="button">✕ סגור</button>
+    </div>
+    <video id="qr-video" playsinline muted></video>
+    <canvas id="qr-canvas" hidden></canvas>
+    <p class="hint" id="qr-status">מבקש הרשאת מצלמה…</p>
+    <div class="add-row">
+      <button id="qr-file-btn" class="btn btn-sm" type="button">בחירת תמונה במקום מצלמה</button>
+      <input type="file" id="qr-file-input" accept="image/*" multiple hidden>
+    </div>
+  </div>
 </div>
 
 <main>
@@ -42,7 +76,7 @@
     <img src="logo.jpeg" alt="מאיר ויואל — חברה להנדסה אזרחית">
   </div>
 
-  <!-- כללי: פרטי המבנה -->
+  <!-- כללי: פרטי המבנה בלבד — סוקר/ממצאים/תרשימים עברו ללשוניות משלהם -->
   <details class="panel no-print" id="sec-structure" open>
     <summary class="panel-head">פרטי המבנה</summary>
     <div class="panel-body">
@@ -71,10 +105,31 @@
         <label>תאריך הסקירה הנוכחית
           <input type="date" id="insp-date">
         </label>
+        <label>תאריך הסקירה הקודמת
+          <input type="date" id="prev-insp-date" data-action="prev-insp-date">
+        </label>
       </div>
       <div id="insp-result" class="hint"></div>
       <div id="span-dims"></div>
       <p class="hint" id="span-rule-hint"></p>
+    </div>
+  </details>
+
+  <!-- שינויים -->
+  <details class="panel no-print" id="sec-changes" open>
+    <summary class="panel-head">שינויים</summary>
+    <div class="panel-body">
+      <p class="hint">תיעוד שינויים שחלו במבנה או בתהליך הסקירה — תאריך והערה חופשית לכל שורה.</p>
+      <div id="change-notes"></div>
+    </div>
+  </details>
+
+  <!-- ממצאים -->
+  <details class="panel no-print" id="sec-findings" open>
+    <summary class="panel-head">ממצאים</summary>
+    <div class="panel-body">
+      <p class="hint">תמונות תיעוד כלליות של המבנה, שאינן קשורות לפגם ספציפי ברכיב — למשל תמונה כללית, חזית, שביל גישה.</p>
+      <div id="finding-photos"></div>
     </div>
   </details>
 
@@ -94,6 +149,50 @@
     </div>
   </details>
 
+  <!-- סוקר -->
+  <details class="panel no-print" id="sec-surveyor" open>
+    <summary class="panel-head">סוקר</summary>
+    <div class="panel-body">
+      <div class="grid-2">
+        <label>שם הסוקר
+          <input type="text" id="st-surveyor" placeholder="שם הסוקר שביצע את הסקירה">
+        </label>
+        <label>שם החברה
+          <input type="text" id="st-company" placeholder="שם חברת הסקירה">
+        </label>
+      </div>
+      <p class="hint">הערות חופשיות של הסוקר — תאריך והערה לכל שורה.</p>
+      <div id="surveyor-notes"></div>
+    </div>
+  </details>
+
+  <!-- מהנדס -->
+  <details class="panel no-print" id="sec-engineer" open>
+    <summary class="panel-head">מהנדס</summary>
+    <div class="panel-body">
+      <p class="hint">הערות המהנדס הבוחן — תאריך והערה חופשית לכל שורה.</p>
+      <div id="engineer-notes"></div>
+    </div>
+  </details>
+
+  <!-- תרשימים -->
+  <details class="panel no-print" id="sec-drawings" open>
+    <summary class="panel-head">תרשימים</summary>
+    <div class="panel-body">
+      <p class="hint">כל שורה מקשרת קוד סקיצה (מתיקיית "סקיצות") לכותרת שתופיע מעליה בנספח התרשימים — למשל 001 → תנוחה.</p>
+      <div id="sketches"></div>
+    </div>
+  </details>
+
+  <!-- תקשורת -->
+  <details class="panel no-print" id="sec-communication" open>
+    <summary class="panel-head">תקשורת</summary>
+    <div class="panel-body">
+      <p class="hint">התכתבויות והערות תקשורת בנוגע לסקירה — תאריך והערה חופשית לכל שורה.</p>
+      <div id="communication-notes"></div>
+    </div>
+  </details>
+
   <!-- תוצאות -->
   <details class="panel" id="sec-results" open>
     <summary class="panel-head no-print">תוצאות</summary>
@@ -107,6 +206,19 @@
     <summary class="panel-head no-print">תקציר מנהלים</summary>
     <div class="panel-body">
       <div id="summary"></div>
+    </div>
+  </details>
+
+  <!-- ת.ז: תעודת זהות לגשר ומובל (מהדורה 6-2008) -->
+  <details class="panel no-print" id="sec-idcard" open>
+    <summary class="panel-head">תעודת זהות לגשר ומובל</summary>
+    <div class="panel-body">
+      <p class="hint">שדות מסומנים "נמשך אוטומטית" מוצגים לקריאה בלבד ונלקחים מלשוניות אחרות — אין להזין אותם כאן.</p>
+      <label style="max-width:320px">קוד תמונה ראשית (לעמוד 1 בהדפסה)
+        <input type="text" id="idcard-photo" data-action="idcard-photo" placeholder="קוד מתיקיית תמונות" dir="ltr">
+      </label>
+      <div id="idcard-tabs" class="tabs"></div>
+      <div id="idcard-fields"></div>
     </div>
   </details>
 
@@ -127,6 +239,10 @@
 <script src="app.js"></script>
 <script src="vendor/jspdf.umd.min.js" defer></script>
 <script src="vendor/html2canvas.min.js" defer></script>
+<script src="vendor/pako.min.js" defer></script>
+<script src="vendor/qrcode.js" defer></script>
+<script src="vendor/jsQR.js" defer></script>
+<script src="recovery.js" defer></script>
 <script src="pdf.js" defer></script>
 </body>
 </html>
