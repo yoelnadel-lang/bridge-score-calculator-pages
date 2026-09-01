@@ -183,8 +183,11 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 .subs-table th, .defects-table th { background: var(--bg); }
 .subs-table input { width: 90px; padding: 4px 6px; }
 .subs-table input.note-input { width: 100%; min-width: 160px; font-size: .82rem; color: #57606a; }
+.serial-cell { text-align: center; color: #57606a; font-weight: 600; }
 .sub-actions { white-space: nowrap; }
 .subs-block { margin-bottom: 8px; }
+.comp-qty-field { max-width: 260px; margin-bottom: 6px; }
+.comp-qty-field input { width: 90px; }
 
 .defect-form {
   border: 1px dashed var(--primary); border-radius: 8px; padding: 12px; margin-top: 10px;

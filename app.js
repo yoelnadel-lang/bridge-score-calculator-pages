@@ -32,6 +32,11 @@ const ui = { activeSpan: 1, activeTab: "general", activeComponent: null, openDef
 // code -> { dataUrl, filename, kind: "photo"|"sketch" }
 const photoStore = new Map();
 
+// קובץ התרשימים (DWG) הוא לא תמונה — אין מה להטמיע ב-PDF, ולכן לא נשמר
+// בתוכן עצמו, רק סימון session-בלבד (כמו photoStore) שקובץ נבחר בפועל,
+// כדי להבדיל מהקלדה ידנית של שם קובץ בלי שנבחר קובץ אמיתי.
+let drawingsFileAttached = false;
+
 function parsePhotoCodes(str) {
   return String(str || "").split(";").map((s) => s.trim()).filter(Boolean);
 }
@@ -49,6 +54,9 @@ function collectMissingPhotoCodes() {
   for (const sk of state.sketches) if (sk.code && sk.code.trim()) codes.add(sk.code.trim());
   for (const code of parsePhotoCodes(state.immediateAttention.photo)) codes.add(code);
   if (state.idCardMainPhoto && state.idCardMainPhoto.trim()) codes.add(state.idCardMainPhoto.trim());
+  for (const group of ID_CARD_GROUPS)
+    for (const f of group.fields)
+      if (f.type === "photo") for (const code of parsePhotoCodes(state.idCard[f.code])) codes.add(code);
   return [...codes].filter((code) => !photoStore.has(code));
 }
 
@@ -221,13 +229,29 @@ function todayISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// שורת ממצא לכל תמונה נדרשת לפי סוג המבנה (טבלת "ממצאים" ב"דפי עזר לסקירה..",
+// נתיבי ישראל) — קוד תמונה ריק, הסוקר ממלא ומשייך את הקובץ בעצמו.
+function requiredFindingsFor(structureClass) {
+  return (REQUIRED_FINDINGS_BY_CLASS[structureClass] || []).map((desc) => ({ uid: nextUid(), desc, photo: "" }));
+}
+// true אם הרשימה עדיין בדיוק כמו שנוצרה אוטומטית (אף קוד תמונה לא מולא, ואף
+// תיאור לא נערך) — כלומר בטוח להחליף אותה ברשימת ברירת המחדל של סוג אחר
+// בלי למחוק עבודה של הסוקר. משמש בשינוי סיווג המבנה.
+function isPristineFindingsList(list) {
+  if (!list.every((f) => !f.photo)) return false;
+  const descs = list.map((f) => f.desc);
+  return Object.values(REQUIRED_FINDINGS_BY_CLASS).some(
+    (tpl) => tpl.length === descs.length && tpl.every((d, i) => d === descs[i])
+  );
+}
+
 function defaultState() {
   return {
     name: "", number: "", structureClass: "BRG", superType: 4, tunnelType: null,
     inspClass: "", inspDate: todayISO(), prevInspDate: "",
     surveyorName: "", companyName: "",
     immediateAttention: { text: "", photo: "" },
-    findingPhotos: [], sketches: [],
+    findingPhotos: requiredFindingsFor("BRG"), sketches: [], drawingsFile: "",
     changeNotes: [], surveyorNotes: [], engineerNotes: [], communicationNotes: [],
     idCard: {}, idCardMainPhoto: "",
     spanCount: 1, spans: [{ id: 1, dim: "", dimNote: "", components: [] }],
@@ -246,7 +270,7 @@ function migrateState(s) {
   out.spans = (out.spans || []).map((sp) => ({
     dimNote: "", ...sp,
     components: (sp.components || []).map((c) => ({
-      ...c, subs: (c.subs || []).map((su) => ({ note: "", ...su })),
+      ...c, subs: (c.subs || []).map((su) => ({ note: "", size2: null, ...su })),
     })),
   }));
   return out;
@@ -294,9 +318,14 @@ function addComponent(catalogId) {
     else if (def.dynamic === "secondary") { alert("לסוג המבנה שנבחר אין רכיב משני (טבלה 2)"); return null; }
   }
   const uid = nextUid();
+  // ברירת המחדל של הנוהל: רכיב ללא פגם רשום נחשב תקין (1A) — לכן כל רכיב
+  // חדש מתחיל עם רשומת "רכיב תקין" מפורשת (כמו לחיצה על "✔️ רכיב תקין"),
+  // ולא עם רשימת פגמים ריקה. saveDraft() מסיר אותה אוטומטית ברגע שנוסף פגם
+  // אמיתי, כדי שלא תופיע יחד איתו בטבלה.
   activeSpanObj().components.push({
     uid, catalogId: displayId, name, importance: def.imp, unit, unit2,
-    surveyed: true, subs: [{ id: 1, size: 1, note: "" }], defects: [],
+    surveyed: true, subs: [{ id: 1, size: 1, size2: null, note: "" }],
+    defects: [{ uid: nextUid(), family: null, def: null, sub: 1, s: 1, ex: "A", note: "רכיב תקין", photo: "" }],
   });
   return uid;
 }
@@ -340,6 +369,9 @@ function saveDraft() {
   if (!d.def) return;
   const errors = Calc.validateDefect(+d.s, d.ex, found.comp.unit);
   if (errors.length) return;
+  // ברגע שנרשם פגם אמיתי, רשומת ברירת המחדל "רכיב תקין" (def=null) כבר לא
+  // נכונה — מוסרים אותה כדי שלא תופיע יחד עם הפגם החדש בטבלה.
+  found.comp.defects = found.comp.defects.filter((x) => !(x.def == null && x.note === "רכיב תקין"));
   found.comp.defects.push({ uid: nextUid(), family: d.family, def: d.def, sub: +d.sub, s: +d.s, ex: d.ex, note: d.note, photo: d.photo });
   ui.openDefectForm = null; ui.draft = null;
   scheduleUpdate();
@@ -447,6 +479,10 @@ function update() {
   document.getElementById("insp-date").value = state.inspDate;
   document.getElementById("prev-insp-date").value = state.prevInspDate;
   // שדות סטטיים (לא נבנים מחדש) — כך הסמן לא קופץ באמצע הקלדה בטקסט חופשי
+  document.getElementById("drawings-file").value = state.drawingsFile;
+  document.getElementById("drawings-file-status").innerHTML = drawingsFileAttached
+    ? '<span class="photo-chip ok">✔ קובץ הועלה</span>'
+    : '<span class="photo-chip missing">לא הועלה קובץ עדיין</span>';
   document.getElementById("ia-text").value = state.immediateAttention.text;
   document.getElementById("ia-photo").value = state.immediateAttention.photo;
   document.getElementById("ia-photo-status").innerHTML =
@@ -461,9 +497,9 @@ function update() {
       : "מבנה בעל 3 מפתחים ומעלה: ציון לכל מפתח בנפרד ושקלול לפי המימד (משוואה 6.2). הזן מימד לכל מפתח.";
 
   document.getElementById("finding-photos").innerHTML = renderFindingPhotos(state, photoStore);
-  document.getElementById("sketches").innerHTML = renderSketches(state, photoStore);
+  document.getElementById("sketches").innerHTML = renderSketches(state);
   document.getElementById("change-notes").innerHTML = renderNotesTable(state.changeNotes, "changeNotes");
-  document.getElementById("surveyor-notes").innerHTML = renderNotesTable(state.surveyorNotes, "surveyorNotes");
+  document.getElementById("surveyor-notes").innerHTML = renderSurveyorNotes(state.surveyorNotes);
   document.getElementById("engineer-notes").innerHTML = renderNotesTable(state.engineerNotes, "engineerNotes");
   document.getElementById("communication-notes").innerHTML = renderNotesTable(state.communicationNotes, "communicationNotes");
 
@@ -477,7 +513,7 @@ function update() {
   }
 
   document.getElementById("idcard-tabs").innerHTML = renderIdCardTabs(ui.idCardTab);
-  document.getElementById("idcard-fields").innerHTML = renderIdCardGroup(ui.idCardTab, state, result);
+  document.getElementById("idcard-fields").innerHTML = renderIdCardGroup(ui.idCardTab, state, result, photoStore);
   document.getElementById("idcard-photo").value = state.idCardMainPhoto;
   document.getElementById("control-audit").innerHTML = renderControlAudit(state, result);
 
@@ -486,6 +522,7 @@ function update() {
     placeholder: "— בחר רכיב מהקטלוג (הקלד קוד או שם) —",
   });
   document.getElementById("span-tabs").innerHTML = renderSpanTabs(state, ui.activeSpan);
+  document.getElementById("add-comp-span").innerHTML = renderAddCompSpanOptions(state, ui.activeSpan);
   document.getElementById("comp-master").innerHTML = renderComponentMasterList(activeSpanObj(), ui);
   document.getElementById("comp-detail").innerHTML = renderComponentDetail(activeSpanObj(), ui, photoStore);
 
@@ -505,6 +542,7 @@ function loadExample() {
   st.name = "גשר BR-11 (דוגמה)";
   st.number = "BR-11";
   st.structureClass = fx.structureClass;
+  st.findingPhotos = requiredFindingsFor(st.structureClass);  // מתעדכן לפי הסיווג בפועל, לא רק ברירת המחדל
   st.superType = fx.superstructureType;
   st.spanCount = fx.spans.length;
   st.spans = fx.spans.map((span, i) => ({
@@ -570,6 +608,22 @@ function init() {
   document.getElementById("st-number").addEventListener("input", (e) => { state.number = e.target.value; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); });
   document.getElementById("st-surveyor").addEventListener("input", (e) => { state.surveyorName = e.target.value; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); });
   document.getElementById("st-company").addEventListener("input", (e) => { state.companyName = e.target.value; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); });
+  document.getElementById("drawings-file").addEventListener("input", (e) => {
+    state.drawingsFile = e.target.value;
+    // עריכה ידנית של שם הקובץ אחרי שנבחר קובץ אמיתי — הסימון ✔ כבר לא מדויק
+    drawingsFileAttached = false;
+    document.getElementById("drawings-file-status").innerHTML = '<span class="photo-chip missing">לא הועלה קובץ עדיין</span>';
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  });
+  document.getElementById("btn-drawings-file").addEventListener("click", () => document.getElementById("drawings-file-input").click());
+  document.getElementById("drawings-file-input").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    state.drawingsFile = file.name;
+    drawingsFileAttached = true;
+    e.target.value = "";
+    scheduleUpdate();
+  });
   // "תשומת לב מיידית" — שדות סטטיים, לכן שמירה ישירה בלי רינדור מלא (הסמן
   // בטקסט ארוך היה קופץ). רק תגיות הסטטוס של קוד התמונה מתרעננות בנפרד.
   document.getElementById("ia-text").addEventListener("input", (e) => {
@@ -582,7 +636,13 @@ function init() {
     document.getElementById("ia-photo-status").innerHTML =
       photoCodesCell(photoStore, e.target.value) || '<span class="hint">לא נרשם קוד</span>';
   });
-  document.getElementById("st-class").addEventListener("change", (e) => { state.structureClass = e.target.value; scheduleUpdate(); });
+  document.getElementById("st-class").addEventListener("change", (e) => {
+    state.structureClass = e.target.value;
+    // מחליף לרשימת התמונות הנדרשות של הסיווג החדש רק אם הרשימה הנוכחית עדיין
+    // בדיוק ברירת המחדל שנוצרה אוטומטית — כדי לא למחוק עבודה שהסוקר כבר עשה
+    if (isPristineFindingsList(state.findingPhotos)) state.findingPhotos = requiredFindingsFor(e.target.value);
+    scheduleUpdate();
+  });
   document.getElementById("st-spancount").addEventListener("change", (e) => {
     const n = Math.max(1, Math.min(MAX_SPANS, +e.target.value || 1));
     const lost = state.spans.slice(n).filter((s) => s.components.length);
@@ -606,11 +666,54 @@ function init() {
     else if (action === "sec-tab") { ui.activeTab = el.dataset.tab; scheduleUpdate(); }
     else if (action === "comp-select") { ui.activeComponent = compUid; ui.openDefectForm = null; scheduleUpdate(); }
     else if (action === "idcard-tab") { ui.idCardTab = el.dataset.group; scheduleUpdate(); }
-    else if (action === "finding-add") { state.findingPhotos.push({ uid: nextUid(), desc: "", photo: "" }); scheduleUpdate(); }
+    else if (action === "finding-add") {
+      // קריאה ישירה מה-DOM לפני ההוספה — לא סומכים על שאירוע ה-change של
+      // השדה שהיה פוקוס בו הספיק להירשם קודם (תלוי בתזמון blur/click בפועל).
+      // כך לחיצה אחת גם שומרת את מה שהוקלד וגם פותחת שורה חדשה עם פוקוס מיידי.
+      document.querySelectorAll('#finding-photos [data-action="finding-desc"]').forEach((inp) => {
+        const f = state.findingPhotos.find((x) => x.uid === inp.dataset.finding);
+        if (f) f.desc = inp.value;
+      });
+      document.querySelectorAll('#finding-photos [data-action="finding-photo"]').forEach((inp) => {
+        const f = state.findingPhotos.find((x) => x.uid === inp.dataset.finding);
+        if (f) f.photo = inp.value;
+      });
+      const uid = nextUid();
+      state.findingPhotos.push({ uid, desc: "", photo: "" });
+      scheduleUpdate(() => {
+        const inp = document.querySelector(`[data-action="finding-desc"][data-finding="${uid}"]`);
+        if (inp) inp.focus();
+      });
+    }
     else if (action === "finding-remove") {
       state.findingPhotos = state.findingPhotos.filter((f) => f.uid !== el.dataset.finding); scheduleUpdate();
     }
-    else if (action === "sketch-add") { state.sketches.push({ uid: nextUid(), code: "", caption: "" }); scheduleUpdate(); }
+    else if (action === "sketch-add") {
+      // אותו תיקון כמו "הוסף שורת תיעוד" בממצאים: קריאה ישירה מה-DOM לפני
+      // ההוספה במקום להסתמך על שה-change של השדה הפוקוס-בו הספיק להירשם —
+      // כך לחיצה אחת גם שומרת וגם פותחת שורה חדשה. קוד הסקיצה מקבל כברירת
+      // מחדל את המספר הרץ הבא (001, 002, …) לפי הקוד המספרי הגבוה ביותר
+      // הקיים כרגע — ונשאר ניתן לעריכה מלאה.
+      document.querySelectorAll('#sketches [data-action="sketch-code"]').forEach((inp) => {
+        const s = state.sketches.find((x) => x.uid === inp.dataset.sketch);
+        if (s) s.code = inp.value;
+      });
+      document.querySelectorAll('#sketches [data-action="sketch-caption"]').forEach((inp) => {
+        const s = state.sketches.find((x) => x.uid === inp.dataset.sketch);
+        if (s) s.caption = inp.value;
+      });
+      let maxCode = 0;
+      for (const s of state.sketches) {
+        const n = parseInt((s.code || "").trim(), 10);
+        if (!isNaN(n) && n > maxCode) maxCode = n;
+      }
+      const uid = nextUid();
+      state.sketches.push({ uid, code: String(maxCode + 1).padStart(3, "0"), caption: "" });
+      scheduleUpdate(() => {
+        const inp = document.querySelector(`[data-action="sketch-caption"][data-sketch="${uid}"]`);
+        if (inp) inp.focus();
+      });
+    }
     else if (action === "sketch-remove") {
       state.sketches = state.sketches.filter((s) => s.uid !== el.dataset.sketch); scheduleUpdate();
     }
@@ -638,7 +741,7 @@ function init() {
     }
     else if (action === "sub-add") {
       const f = findComp(compUid);
-      if (f) { f.comp.subs.push({ id: f.comp.subs.length + 1, size: 1, note: "" }); scheduleUpdate(); }
+      if (f) { f.comp.subs.push({ id: f.comp.subs.length + 1, size: 1, size2: null, note: "" }); scheduleUpdate(); }
     }
     else if (action === "sub-clone") {
       // שכפול תת-רכיב: מידה + הערה + כל הפגמים המשויכים אליו — ואז רק עורכים
@@ -646,7 +749,7 @@ function init() {
       const src = f && f.comp.subs.find((s) => s.id === +el.dataset.sub);
       if (src) {
         const newId = f.comp.subs.length + 1;
-        f.comp.subs.push({ id: newId, size: src.size, note: src.note || "" });
+        f.comp.subs.push({ id: newId, size: src.size, size2: src.size2 ?? null, note: src.note || "" });
         const clones = f.comp.defects.filter((d) => +d.sub === src.id)
           .map((d) => ({ ...d, uid: nextUid(), sub: newId }));
         f.comp.defects.push(...clones);
@@ -724,11 +827,44 @@ function init() {
       const f = findComp(compUid);
       if (f) { f.comp.surveyed = el.checked; scheduleUpdate(); }
     }
+    else if (action === "comp-qty") {
+      // "כמות רכיבים": מספר תתי-הרכיבים בפועל (למשל 3 קורות ראשיות = 3) —
+      // הטבלה מתעדכנת אוטומטית ל-N שורות במקום להוסיף אותן אחת-אחת.
+      // תתי-רכיבים תמיד ממוספרים 1..N ברצף (ר' sub-remove), לכן הגדלה/הקטנה
+      // היא תמיד בסוף הרשימה ולא דורשת מיפוי מזהים מחדש.
+      const f = findComp(compUid);
+      if (f) {
+        const cur = f.comp.subs.length;
+        const n = Math.max(1, Math.min(200, +el.value || 1));
+        if (n === cur) { scheduleUpdate(); return; }
+        if (n > cur) {
+          for (let i = cur; i < n; i++) f.comp.subs.push({ id: i + 1, size: 1, size2: null, note: "" });
+        } else {
+          const removed = f.comp.subs.slice(n);
+          const removedIds = new Set(removed.map((s) => s.id));
+          const hasData = removed.some((s) => s.size !== 1 || s.size2 != null || s.note) ||
+            f.comp.defects.some((d) => removedIds.has(+d.sub));
+          if (hasData && !confirm(`הקטנת הכמות ל-${n} תמחק לצמיתות ${cur - n} רכיב/ים ואת הפגמים המשויכים אליהם. להמשיך?`)) {
+            el.value = cur; return;
+          }
+          f.comp.subs = f.comp.subs.slice(0, n);
+          f.comp.defects = f.comp.defects.filter((d) => !removedIds.has(+d.sub));
+        }
+        scheduleUpdate();
+      }
+    }
     else if (action === "sub-size") {
       const f = findComp(compUid);
       if (f) {
         const sub = f.comp.subs.find((s) => s.id === +el.dataset.sub);
         if (sub) { sub.size = +el.value || 0; scheduleUpdate(); }
+      }
+    }
+    else if (action === "sub-size2") {
+      const f = findComp(compUid);
+      if (f) {
+        const sub = f.comp.subs.find((s) => s.id === +el.dataset.sub);
+        if (sub) { sub.size2 = el.value === "" ? null : +el.value || 0; scheduleUpdate(); }
       }
     }
     else if (action === "sub-note") {
@@ -745,15 +881,18 @@ function init() {
         if (d) { d.photo = el.value; scheduleUpdate(); }
       }
     }
+    else if (action === "add-comp-span") { ui.activeSpan = +el.value; ui.activeComponent = null; ui.openDefectForm = null; scheduleUpdate(); }
     else if (action === "add-comp") {
-      // בחירה בקומבו = הוספה מיידית (בלי כפתור) — והפוקוס עובר למידת הרכיב החדש
+      // בחירה בקומבו = הוספה מיידית (בלי כפתור), למפתח שנבחר ב"הוספה למפתח" —
+      // והפוקוס עובר קודם לכמות הרכיבים (לא למידה) כדי שסדר המילוי הטבעי
+      // יהיה קודם "כמה יש" ורק אז "כמה מודד כל אחד"
       const v = el.value;
       if (v) {
         Combobox.setValue("add-comp", "");
         const uid = addComponent(v);
         if (uid) ui.activeComponent = uid;   // הרכיב החדש נבחר מיד ברשימת-האב
         scheduleUpdate(uid ? () => {
-          const inp = document.querySelector(`[data-comp="${uid}"] input[data-action="sub-size"]`);
+          const inp = document.querySelector(`[data-comp="${uid}"] input[data-action="comp-qty"]`);
           if (inp) { inp.focus(); inp.select(); }
         } : undefined);
       }

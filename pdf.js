@@ -111,7 +111,7 @@ const PdfExport = (() => {
     const rows = state.findingPhotos.map((f, i) => `<tr>
       <td>${i + 1}</td><td>${esc(f.desc || "")}</td><td>${photoCodesCell(photoStore, f.photo)}</td>
     </tr>`);
-    const thead = `<thead><tr><th>מספר</th><th>תיאור הממצא</th><th>קוד תמונה</th></tr></thead>`;
+    const thead = `<thead><tr><th>מס"ד</th><th>תיאור הממצאים</th><th>שם התמונה</th></tr></thead>`;
     const { theadH, heights } = measureRowHeights(thead, rows, budgetInfo.contentW, scratch);
     const chunks = paginateRows(rows, heights, budgetInfo.bodyHeight - theadH);
     return chunks.map((chunk) => `${govSectionTitle(2, "תיעוד ממצאים")}<table class="gov-table">${thead}<tbody>${chunk.join("")}</tbody></table>`);
@@ -230,6 +230,15 @@ const PdfExport = (() => {
       for (const code of parsePhotoCodes(f.photo)) {
         const entry = photoStore.get(code);
         if (entry && entry.kind === "photo") items.push({ dataUrl: entry.dataUrl, filename: entry.filename, caption: f.desc || "" });
+      }
+    }
+    for (const group of ID_CARD_GROUPS) {
+      for (const f of group.fields) {
+        if (f.type !== "photo") continue;
+        for (const code of parsePhotoCodes((state.idCard || {})[f.code])) {
+          const entry = photoStore.get(code);
+          if (entry && entry.kind === "photo") items.push({ dataUrl: entry.dataUrl, filename: entry.filename, caption: f.label });
+        }
       }
     }
     return items;
@@ -451,7 +460,7 @@ const PdfExport = (() => {
           ...idCardAutoFields(group.id, state, result).map((f) =>
             `<tr><td>${esc(f.code)}</td><td>${esc(f.label)}</td><td dir="ltr">${esc(f.value)}</td></tr>`),
           ...group.fields.map((f) =>
-            `<tr><td>${esc(f.code)}</td><td>${esc(f.label)}</td><td dir="ltr">${esc(state.idCard[f.code] || "—")}</td></tr>`),
+            `<tr><td>${esc(f.displayCode || f.code)}</td><td>${esc(f.label)}</td><td dir="ltr">${esc(state.idCard[f.code] || f.placeholder || "—")}</td></tr>`),
         ];
         const { theadH, heights } = measureRowHeights(thead, rows, contentW, scratch);
         const chunks = paginateRows(rows, heights, bodyHeight - theadH);

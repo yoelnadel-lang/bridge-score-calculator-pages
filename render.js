@@ -31,33 +31,34 @@ function photoCodesCell(photoStore, photoField) {
 }
 
 // --- תיעוד ממצאים: תמונות תיעוד כלליות, לא קשורות לרכיב ספציפי ---
+// מס"ד: לא שדה בנתונים — נגזר ממיקום השורה (i+1) ומתעדכן אוטומטית בכל
+// הוספה/הסרה, בדיוק כמו המספור בעמוד המקביל בדוח המודפס (buildFindingsPages).
 function renderFindingPhotos(state, photoStore) {
-  const rows = state.findingPhotos.map((f) => `<tr>
+  const rows = state.findingPhotos.map((f, i) => `<tr>
+    <td class="serial-cell">${i + 1}</td>
     <td><input type="text" value="${esc(f.desc)}" data-action="finding-desc" data-finding="${f.uid}" placeholder="למשל: תמונה כללית"></td>
-    <td><input type="text" value="${esc(f.photo)}" data-action="finding-photo" data-finding="${f.uid}" placeholder="קוד תמונה, אפשר כמה מופרדים ב-;" dir="ltr"></td>
-    <td>${photoCodesCell(photoStore, f.photo)}</td>
+    <td>
+      <input type="text" value="${esc(f.photo)}" data-action="finding-photo" data-finding="${f.uid}" placeholder="שם התמונה, אפשר כמה מופרדים ב-;" dir="ltr">
+      ${photoCodesCell(photoStore, f.photo)}
+    </td>
     <td><button class="btn btn-sm btn-danger" data-action="finding-remove" data-finding="${f.uid}">✕</button></td>
   </tr>`).join("");
-  return `<table class="subs-table"><tr><th>תיאור</th><th>קוד תמונה</th><th>סטטוס</th><th></th></tr>${rows}</table>
+  return `<table class="subs-table"><tr><th>מס"ד</th><th>תיאור הממצאים</th><th>שם התמונה</th><th></th></tr>${rows}</table>
     <button class="btn btn-sm" data-action="finding-add">➕ הוסף שורת תיעוד</button>`;
 }
 
 // --- סקיצות: מיפוי קוד סקיצה לכותרת שתופיע בנספח התרשימים ---
-function renderSketches(state, photoStore) {
-  const rows = state.sketches.map((s) => {
-    const code = (s.code || "").trim();
-    return `<tr>
+function renderSketches(state) {
+  const rows = state.sketches.map((s) => `<tr>
       <td><input type="text" value="${esc(s.code)}" data-action="sketch-code" data-sketch="${s.uid}" placeholder="001" dir="ltr"></td>
       <td><input type="text" value="${esc(s.caption)}" data-action="sketch-caption" data-sketch="${s.uid}" placeholder="למשל: תנוחה"></td>
-      <td>${code ? photoChip(photoStore, code) : ""}</td>
       <td><button class="btn btn-sm btn-danger" data-action="sketch-remove" data-sketch="${s.uid}">✕</button></td>
-    </tr>`;
-  }).join("");
-  return `<table class="subs-table"><tr><th>קוד סקיצה</th><th>כותרת</th><th>סטטוס</th><th></th></tr>${rows}</table>
+    </tr>`).join("");
+  return `<table class="subs-table"><tr><th>קוד סקיצה</th><th>כותרת</th><th></th></tr>${rows}</table>
     <button class="btn btn-sm" data-action="sketch-add">➕ הוסף סקיצה</button>`;
 }
 
-// --- טבלת הערות חופשיות (תאריך + טקסט) — משותפת ל-שינויים/סוקר/מהנדס/תקשורת ---
+// --- טבלת הערות חופשיות (תאריך + טקסט) — משותפת ל-שינויים/מהנדס/תקשורת ---
 function renderNotesTable(notes, listKey) {
   const rows = notes.map((n) => `<tr>
     <td><input type="date" value="${esc(n.date)}" data-action="note-date" data-list="${listKey}" data-note="${n.uid}"></td>
@@ -66,6 +67,19 @@ function renderNotesTable(notes, listKey) {
   </tr>`).join("");
   return `<table class="subs-table"><tr><th>תאריך</th><th>הערה</th><th></th></tr>${rows}</table>
     <button class="btn btn-sm" data-action="note-add" data-list="${listKey}">➕ הוסף הערה</button>`;
+}
+
+// --- הערות הסוקר: מס"ד רץ (לא תאריך) + טקסט חופשי — מבנה הנתונים זהה לשאר
+// רשימות ההערות (עדיין יש n.date בכל רשומה, לתאימות אחורה בשחזור QR); כאן
+// פשוט לא מוצג ולא נערך, לפי בקשת המשתמש שאין צורך בתאריך בלשונית הזו ---
+function renderSurveyorNotes(notes) {
+  const rows = notes.map((n, i) => `<tr>
+    <td class="serial-cell">${i + 1}</td>
+    <td><input type="text" value="${esc(n.text)}" data-action="note-text" data-list="surveyorNotes" data-note="${n.uid}" placeholder="הערה חופשית"></td>
+    <td><button class="btn btn-sm btn-danger" data-action="note-remove" data-list="surveyorNotes" data-note="${n.uid}">✕</button></td>
+  </tr>`).join("");
+  return `<table class="subs-table"><tr><th>מס"ד</th><th>הערות הסוקר</th><th></th></tr>${rows}</table>
+    <button class="btn btn-sm" data-action="note-add" data-list="surveyorNotes">➕ הוסף הערה</button>`;
 }
 
 // ============================================================================
@@ -104,17 +118,32 @@ function idCardAutoFields(groupId, state, result) {
   return [];
 }
 
-function renderIdCardGroup(groupId, state, result) {
+function renderIdCardGroup(groupId, state, result, photoStore) {
   const group = ID_CARD_GROUPS.find((g) => g.id === groupId) || ID_CARD_GROUPS[0];
   const auto = idCardAutoFields(groupId, state, result).map(({ code, label, value }) => `
     <label>${esc(code)} ${esc(label)} <span class="hint">(נמשך אוטומטית)</span>
       <input type="text" value="${esc(value)}" readonly>
     </label>`).join("");
-  const editable = group.fields.map((f) => `
-    <label>${esc(f.code)} ${esc(f.label)}
+  const editable = group.fields.map((f) => {
+    if (f.type === "photo") {
+      // dir="ltr" נחוץ כדי שכמה קודים מופרדים ב-; לא יתהפכו ויזואלית (כמו בכל
+      // שדה קוד-תמונה מרובה באפליקציה) — text-align:right מיושר את ההנחיה
+      // ואת הטקסט שכן מוזן לימין, כמו בשאר הטופס
+      return `<label>${esc(f.displayCode || f.code)} ${esc(f.label)}
+        <input type="text" value="${esc(state.idCard[f.code] || "")}" dir="ltr" style="text-align:right"
+          placeholder="הכנס תמונת מעקף מקומי" data-action="idcard-field" data-code="${esc(f.code)}">
+        <span class="hint">${photoCodesCell(photoStore, state.idCard[f.code]) || "לא נרשם קוד"}</span>
+      </label>`;
+    }
+    // f.placeholder: סעיפים שהנוהל מייעד למילוי על ידי גורם אחר (למשל מנהל
+    // תחום סקירת גשרים) ולא הסוקר — התיבה נשארת ניתנת לעריכה, רק עם הנחיה
+    // בתוכה כשהיא ריקה, ולא מוצג ריק ("—") אם היא לא מולאה בדוח המודפס.
+    return `<label>${esc(f.code)} ${esc(f.label)}
       <input type="${f.type === "date" ? "date" : "text"}" value="${esc(state.idCard[f.code] || "")}"
+        ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ""}
         data-action="idcard-field" data-code="${esc(f.code)}">
-    </label>`).join("");
+    </label>`;
+  }).join("");
   return `<div class="grid-2">${auto}${editable}</div>`;
 }
 
@@ -302,6 +331,13 @@ function renderSpanTabs(state, activeSpan) {
   ).join("");
 }
 
+// --- בורר מפתח היעד להוספת רכיב — נפרד מהטאבים, כדי שהשיוך יהיה גלוי
+// ומפורש בדיוק במקום שבו בוחרים את הרכיב מהקטלוג ---
+function renderAddCompSpanOptions(state, activeSpan) {
+  if (state.spanCount === 1) return '<option value="1">המבנה כולו</option>';
+  return state.spans.map((s) => `<option value="${s.id}" ${s.id === activeSpan ? "selected" : ""}>מפתח ${s.id}</option>`).join("");
+}
+
 // --- כל פגמי הפנקס בקומבו אחד — הקלדת קוד ("14.1") או שם מביאה את הפגם ---
 function allDefectComboOptions() {
   const famName = {};
@@ -389,9 +425,12 @@ function renderComponent(comp, ui, photoStore) {
     </tr>`;
   }).join("");
 
+  const size2Col = !!comp.unit2;
   const subRows = comp.subs.map((s) => `
     <tr><td>תת-רכיב ${s.id}</td>
       <td><input type="number" min="0" step="any" value="${esc(s.size)}" data-action="sub-size" data-sub="${s.id}"></td>
+      ${size2Col ? `<td><input type="number" min="0" step="any" value="${esc(s.size2 == null ? "" : s.size2)}"
+        data-action="sub-size2" data-sub="${s.id}"></td>` : ""}
       <td><input type="text" class="note-input" value="${esc(s.note || "")}" data-action="sub-note" data-sub="${s.id}"
         placeholder="זכרון ארגוני — לא משפיע על החישוב"></td>
       <td class="sub-actions">
@@ -414,8 +453,12 @@ function renderComponent(comp, ui, photoStore) {
     </div>
     <div class="comp-body">
       <div class="subs-block">
-        <div class="hint">תתי-רכיבים ומידות (${comp.subs.length}) — יחידה: ${esc(comp.unit || "")}</div>
-        <table class="subs-table"><tr><th>תת-רכיב</th><th>מידה [${esc(comp.unit || "")}]</th><th>הערה — איך חושבה המידה</th><th></th></tr>${subRows}</table>
+        <label class="comp-qty-field">כמות רכיבים במפתח זה
+          <input type="number" min="1" step="1" value="${comp.subs.length}" data-action="comp-qty"
+            title='לדוגמה: אם יש 3 קורות ראשיות במפתח, הכמות היא 3 — הטבלה תתעדכן אוטומטית ל-3 שורות'>
+        </label>
+        <div class="hint">מלאו את המידה (וה"מידה משנית" אם יש) לכל רכיב בטבלה — יחידה: ${esc(comp.unit || "")}${size2Col ? `, ${esc(comp.unit2)}` : ""}</div>
+        <table class="subs-table"><tr><th>תת-רכיב</th><th>מידה [${esc(comp.unit || "")}]</th>${size2Col ? `<th>מידה משנית ${esc(comp.unit2)}</th>` : ""}<th>הערה — איך חושבה המידה</th><th></th></tr>${subRows}</table>
         <button class="btn btn-sm" data-action="sub-add">➕ תת-רכיב</button>
       </div>
       ${comp.defects.length ? `<table class="defects-table">
@@ -484,6 +527,18 @@ function renderResults(state, result) {
   );
   html += "</div>";
 
+  // רכיבים שקיימים אך סומנו "לא ניתן לסקירה" — לא נכללים בשום חישוב לעיל
+  // (ר' comp.surveyed ב-calc.js); כאן כדי שהחריגה תהיה גלויה, לא רק מרומזת
+  // מהציון. אותה רשימה בדיוק מוצגת גם בטאב "בקרה", שורה-שורה מול כל מפתח.
+  const notSurveyed = result.spans.flatMap((s) => s.comps.filter((c) => !c.surveyed).map((c) => ({ ...c, spanId: s.id })));
+  if (notSurveyed.length) {
+    html += `<h3>⚠️ רכיבים קיימים שלא נסקרו — לא נכללים בחישוב הציון</h3>
+      <table class="spans-table">
+        <tr><th>מפתח</th><th>רכיב</th></tr>
+        ${notSurveyed.map((c) => `<tr><td>מפתח ${c.spanId}</td><td>${esc(c.name)}</td></tr>`).join("")}
+      </table>`;
+  }
+
   if (!result.singleUnit) {
     html += `<table class="spans-table">
       <tr><th>מפתח</th><th>${esc(STRUCTURE_CLASSES[state.structureClass].dimLabel)}</th>
@@ -547,10 +602,10 @@ function renderSummary(state, result, summary) {
   const b = result.bridge;
 
   let html = '<div class="summary-block">';
-  html += `<h3>🏗️ זיהוי המבנה</h3><p class="summary-name">${esc(state.name || "—")}</p>`;
+  html += `<h3>זיהוי המבנה</h3><p class="summary-name">${esc(state.name || "—")}</p>`;
 
   // מבנה מרובה-מפתחים ללא מימדי שקלול — הציון עדיין null, אין להפיל את הרינדור
-  html += `<h3>🎯 הציונים ומשמעותם</h3><div class="gauges">
+  html += `<h3>הציונים ומשמעותם</h3><div class="gauges">
     ${gaugeSVG(b.method_norm.cpiAv, MEANING_AV, b.meaningAv, "CPIav — ציון ממוצע", "לפי הנוהל, משוואה 6.2 · טבלה 15")}
     ${gaugeSVG(b.cpiCrit, MEANING_CRIT, b.meaningCrit, "CPIcrit — הרכיב הקריטי", "הרכיב הגרוע בחשיבות \"גבוהה מאוד\" · טבלה 15")}
   </div>`;
@@ -564,6 +619,12 @@ function renderSummary(state, result, summary) {
     html += `<h3>🔴 הרכיב הקריטי (קובע את CPIcrit)</h3>
       <p><strong>${esc(c.name)}</strong>${result.singleUnit ? "" : ` · מפתח ${esc(c.spanId)}`}${
         defs.length ? " · פגם: " + defs.map(esc).join("; ") : ""}</p>`;
+  }
+
+  if (summary.notSurveyed.length) {
+    html += `<h3>⚠️ רכיבים שלא נסקרו</h3>
+      <p>${summary.notSurveyed.length} רכיב/ים קיימים במבנה אך סומנו "לא ניתן לסקירה" — לא נכללו בציון:
+      ${summary.notSurveyed.map((c) => esc(c.name)).join("; ")}.</p>`;
   }
 
   html += "</div>";

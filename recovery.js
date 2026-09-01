@@ -38,6 +38,7 @@ function serializeForRecovery(state) {
     ic: state.idCard,
     mp: state.idCardMainPhoto,
     ia: [state.immediateAttention.text, state.immediateAttention.photo],
+    df: state.drawingsFile,
   };
 }
 
@@ -73,6 +74,7 @@ function deserializeFromRecovery(c) {
   // תוספת אחרי הגרסה הראשונה — נשארת תואמת לאחור: קוד שהודפס לפני כן פשוט
   // לא נושא את השדה, ולכן הוא נטען ריק במקום להיכשל.
   st.immediateAttention = { text: (c.ia && c.ia[0]) || "", photo: (c.ia && c.ia[1]) || "" };
+  st.drawingsFile = c.df || "";
   return st;
 }
 

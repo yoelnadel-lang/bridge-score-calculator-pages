@@ -103,6 +103,12 @@
         <label>סיווג המבנה לסקירה (טבלת תדירויות, סעיף 3.4)
           <select id="insp-class"></select>
         </label>
+        <label>שם הסוקר
+          <input type="text" id="st-surveyor" placeholder="שם הסוקר שביצע את הסקירה">
+        </label>
+        <label>שם חברת הסקירה
+          <input type="text" id="st-company" placeholder="שם חברת הסקירה">
+        </label>
         <label>תאריך הסקירה הנוכחית
           <input type="date" id="insp-date">
         </label>
@@ -145,7 +151,10 @@
   <details class="panel no-print" id="sec-findings" open>
     <summary class="panel-head">ממצאים</summary>
     <div class="panel-body">
-      <p class="hint">תמונות תיעוד כלליות של המבנה, שאינן קשורות לפגם ספציפי ברכיב — למשל תמונה כללית, חזית, שביל גישה.</p>
+      <p class="hint">תמונות תיעוד כלליות של המבנה, שאינן קשורות לפגם ספציפי ברכיב.
+        <strong>השורות שלהלן מולאו אוטומטית לפי סיווג המבנה — אלו תמונות שחובה להעלות</strong> (לפי "דפי עזר
+        לסקירה" של נתיבי ישראל); אפשר לערוך, למחוק ולהוסיף שורות נוספות. שינוי סיווג המבנה יחליף את הרשימה
+        לרשימת הסיווג החדש כל עוד לא נערכה.</p>
       <div id="finding-photos"></div>
     </div>
   </details>
@@ -156,9 +165,12 @@
     <div class="panel-body">
       <div id="span-tabs" class="tabs"></div>
       <div class="add-row">
+        <label style="max-width:150px">הוספה למפתח
+          <select id="add-comp-span" data-action="add-comp-span"></select>
+        </label>
         <div id="add-comp-combo" class="combo-host"></div>
       </div>
-      <p class="hint">בחירת רכיב מהרשימה מוסיפה אותו מיד למפתח הפעיל, ובוחרת אותו — אפשר להקליד קוד (למשל "12") או שם.</p>
+      <p class="hint">בחירת רכיב מהרשימה מוסיפה אותו מיד למפתח שנבחר משמאל, ובוחרת אותו — אפשר להקליד קוד (למשל "12") או שם.</p>
       <div class="comp-split">
         <div id="comp-master" class="comp-master"></div>
         <div id="comp-detail" class="comp-detail"></div>
@@ -166,19 +178,11 @@
     </div>
   </details>
 
-  <!-- סוקר -->
+  <!-- סוקר: שם הסוקר/שם החברה נמצאים בלשונית "כללי" — כאן רק הערות הסוקר -->
   <details class="panel no-print" id="sec-surveyor" open>
     <summary class="panel-head">סוקר</summary>
     <div class="panel-body">
-      <div class="grid-2">
-        <label>שם הסוקר
-          <input type="text" id="st-surveyor" placeholder="שם הסוקר שביצע את הסקירה">
-        </label>
-        <label>שם החברה
-          <input type="text" id="st-company" placeholder="שם חברת הסקירה">
-        </label>
-      </div>
-      <p class="hint">הערות חופשיות של הסוקר — תאריך והערה לכל שורה.</p>
+      <p class="hint">הערות חופשיות של הסוקר — מס"ד אוטומטי לכל שורה.</p>
       <div id="surveyor-notes"></div>
     </div>
   </details>
@@ -196,7 +200,17 @@
   <details class="panel no-print" id="sec-drawings" open>
     <summary class="panel-head">תרשימים</summary>
     <div class="panel-body">
-      <p class="hint">כל שורה מקשרת קוד סקיצה (מתיקיית "סקיצות") לכותרת שתופיע מעליה בנספח התרשימים — למשל 001 → תנוחה.</p>
+      <label style="max-width:420px">קובץ התרשימים
+        <input type="text" id="drawings-file" placeholder="יש להעלות בפורמט DWG">
+      </label>
+      <div class="add-row" style="margin:6px 0">
+        <button id="btn-drawings-file" class="btn btn-sm" type="button">📎 בחר קובץ DWG</button>
+        <input type="file" id="drawings-file-input" accept=".dwg" hidden>
+        <span id="drawings-file-status"></span>
+      </div>
+      <p class="hint">קובץ ה-DWG עצמו אינו נכלל בדוח המודפס (פורמט CAD, לא ניתן להטמעה כתמונה) — הבחירה כאן
+        רק מסמנת שהוא הוכן, ויש להעלותו בנפרד למערכת המתאימה. שורות הסקיצות שלהלן נפרדות ממנו — כל שורה מקשרת
+        קוד סקיצה (מתיקיית "סקיצות") לכותרת שתופיע מעליה בנספח התרשימים בדוח, למשל 001 → תנוחה.</p>
       <div id="sketches"></div>
     </div>
   </details>
@@ -232,7 +246,7 @@
     <div class="panel-body">
       <p class="hint">שדות מסומנים "נמשך אוטומטית" מוצגים לקריאה בלבד ונלקחים מלשוניות אחרות — אין להזין אותם כאן.</p>
       <label style="max-width:320px">קוד תמונה ראשית (לעמוד 1 בהדפסה)
-        <input type="text" id="idcard-photo" data-action="idcard-photo" placeholder="קוד מתיקיית תמונות" dir="ltr">
+        <input type="text" id="idcard-photo" data-action="idcard-photo" placeholder="תמונת חזית המבנה">
       </label>
       <div id="idcard-tabs" class="tabs"></div>
       <div id="idcard-fields"></div>
