@@ -210,6 +210,21 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 .spans-table th { background: var(--panel-header-bg); }
 .spans-table tbody tr:hover { background: var(--primary-light); }
 .pill { display: inline-block; border-radius: 12px; padding: 1px 10px; color: #fff; font-size: .8rem; }
+/* לשונית "הסבר" — טקסט קריא, ועץ התיקיות ב-dir=ltr כדי שהמבנה לא יתהפך */
+.help-body { max-width: 900px; font-size: .9rem; line-height: 1.75; }
+.help-body ol, .help-body ul { padding-inline-start: 22px; margin: 6px 0; }
+.help-body li { margin-bottom: 3px; }
+.help-body code {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+  padding: 1px 5px; font-size: .85em; direction: ltr; display: inline-block;
+}
+.help-body .warn { display: block; margin: 8px 0; }
+.help-tree {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 10px 14px; direction: ltr; text-align: left; font-size: .85rem;
+  line-height: 1.6; overflow-x: auto; white-space: pre; margin: 8px 0;
+}
+
 .audit-table td:first-child { text-align: right; }
 .audit-steps { margin: 6px 0 10px; padding-inline-start: 20px; font-size: .85rem; line-height: 1.7; }
 /* כרטיס נוסחה: כותרת עברית + נוסחה סימבולית + שורת הצבה עם הנתונים בפועל */

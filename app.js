@@ -12,14 +12,15 @@ let state = defaultState();
 // סדר לפי מסך "סקירות לגשרים" ב-BMS: כללי · שינויים · ממצאים · רכיבים ·
 // סוקר · מהנדס · תרשימים · תקשורת — ואחריהם תוצאות ותקציר מנהלים, שאין
 // להם מקבילה ב-BMS.
-const SEC_TABS = ["general", "changes", "findings", "components", "surveyor", "engineer", "drawings", "communication", "results", "summary", "idcard", "control"];
+const SEC_TABS = ["general", "changes", "findings", "components", "surveyor", "engineer", "drawings", "communication", "results", "summary", "idcard", "control", "help"];
 // לשונית יכולה להציג יותר מפאנל אחד — "כללי" מציגה את פרטי המבנה ומתחתיהם
 // את "תשומת לב מיידית".
 const TAB_SECTION = {
   general: ["sec-structure", "sec-attention"], changes: ["sec-changes"], findings: ["sec-findings"],
   components: ["sec-components"], surveyor: ["sec-surveyor"], engineer: ["sec-engineer"],
   drawings: ["sec-drawings"], communication: ["sec-communication"],
-  results: ["sec-results"], summary: ["sec-summary"], idcard: ["sec-idcard"], control: ["sec-control"],
+  results: ["sec-results"], summary: ["sec-summary"], idcard: ["sec-idcard"],
+  control: ["sec-control"], help: ["sec-help"],
 };
 // רשימות הערות חופשיות (תאריך+טקסט) המשותפות לכמה לשוניות — data-list בכל
 // שורה קובע לאיזו מהן היא שייכת, כך שמטפל אירועים אחד משרת את כולן.
