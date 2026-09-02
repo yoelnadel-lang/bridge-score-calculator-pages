@@ -184,6 +184,21 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 .subs-table input { width: 90px; padding: 4px 6px; }
 .subs-table input.note-input { width: 100%; min-width: 160px; font-size: .82rem; color: #57606a; }
 .serial-cell { text-align: center; color: #57606a; font-weight: 600; }
+
+/* טבלת ממצאים: עמודות 1/3/4 צרות לרוחב התוכן שלהן, עמודת התיאור (2) לוקחת
+   את שאר הרוחב — table-layout:fixed כדי שהאחוזים/הרוחבים המפורשים יכובדו */
+.findings-table { table-layout: fixed; }
+.findings-table th:nth-child(1), .findings-table td:nth-child(1) { width: 44px; }
+.findings-table th:nth-child(3), .findings-table td:nth-child(3) { width: 160px; }
+.findings-table th:nth-child(4), .findings-table td:nth-child(4) { width: 34px; }
+.findings-table input[data-action="finding-desc"] { width: 100%; }
+.findings-table input[data-action="finding-photo"] { width: 100%; }
+
+/* טבלת הערות הסוקר: עמודה 1 צרה לרוחב "מס"ד", עמודת ההערה (2) לוקחת את השאר */
+.surveyor-notes-table { table-layout: fixed; }
+.surveyor-notes-table th:nth-child(1), .surveyor-notes-table td:nth-child(1) { width: 44px; }
+.surveyor-notes-table th:nth-child(3), .surveyor-notes-table td:nth-child(3) { width: 34px; }
+.surveyor-notes-table input[data-action="note-text"] { width: 100%; }
 .sub-actions { white-space: nowrap; }
 .subs-block { margin-bottom: 8px; }
 .comp-qty-field { max-width: 260px; margin-bottom: 6px; }

@@ -324,6 +324,51 @@ const PdfExport = (() => {
     await Promise.all([...root.querySelectorAll("img")].map((img) => waitForImage(img)));
   }
 
+  // בונה את מופע ה-jsPDF של "דוח סקירה" בלי לשמור אותו — קרוא גם מ-exportReport
+  // (הורדה ישירה) וגם מ-exportZip (חבילת ZIP עם קובץ הטעינה)
+  async function buildReportPdf(scratch, container) {
+    const input = buildEngineInput();
+    const result = Calc.computeStructure(input);
+
+    // מדידת השטח הפנוי לתוכן בעמוד — כותרת + סרגל כותרת מקטע חוזרים על כל עמוד
+    const probe = document.createElement("div");
+    probe.className = "gov-page";
+    probe.innerHTML = govHeaderHTML(state, 1, 99) + govSectionTitle(1, "מדידה");
+    scratch.appendChild(probe);
+    const headerH = probe.querySelector(".gov-head").getBoundingClientRect().height;
+    const titleH = probe.querySelector(".gov-section-title").getBoundingClientRect().height;
+    probe.remove();
+    const contentW = PAGE_W_PX - GOV_PAD * 2;
+    const bodyHeight = PAGE_H_PX - GOV_PAD * 2 - headerH - titleH - 10;
+    const budgetInfo = { bodyHeight, contentW };
+
+    const pageBodies = [
+      ...buildGeneralDataPage(state, result),
+      ...buildFindingsPages(state, budgetInfo, scratch, photoStore),
+      ...buildComponentReviewPages(state, budgetInfo, scratch),
+      ...buildQuantitySummaryPages(state, budgetInfo, scratch, result),
+      ...buildSurveyorNotesPage(result),
+      ...buildPhotoPages(collectPhotoItems(state, photoStore)),
+      ...buildSketchPages(state, photoStore),
+      ...buildQrAppendixPages(state),
+    ];
+
+    const total = pageBodies.length;
+    const pdf = new jspdf.jsPDF("l", "mm", "a4");
+    for (let i = 0; i < total; i++) {
+      const pageEl = document.createElement("div");
+      pageEl.className = "gov-page";
+      pageEl.innerHTML = govHeaderHTML(state, i + 1, total) + pageBodies[i];
+      container.appendChild(pageEl);
+      await decodeImages(pageEl);
+      const canvas = await html2canvas(pageEl, { scale: SCALE, backgroundColor: "#ffffff" });
+      if (i) pdf.addPage();
+      pdf.addImage(canvas.toDataURL("image/jpeg", JPEG_QUALITY), "JPEG", 0, 0, PAGE_W_MM, PAGE_H_MM);
+      pageEl.remove();
+    }
+    return pdf;
+  }
+
   // --- ייצוא "דוח סקירה": פורמט רשמי, לרוחב, כותרת+מספור עמוד חוזרים ---
   async function exportReport() {
     if (!hasAnyComponents()) { alert("אין נתונים לייצוא — הוסף רכיבים תחילה."); return; }
@@ -332,46 +377,36 @@ const PdfExport = (() => {
     container.id = "gov-report";
     document.body.appendChild(container);
     try {
-      const input = buildEngineInput();
-      const result = Calc.computeStructure(input);
-
-      // מדידת השטח הפנוי לתוכן בעמוד — כותרת + סרגל כותרת מקטע חוזרים על כל עמוד
-      const probe = document.createElement("div");
-      probe.className = "gov-page";
-      probe.innerHTML = govHeaderHTML(state, 1, 99) + govSectionTitle(1, "מדידה");
-      scratch.appendChild(probe);
-      const headerH = probe.querySelector(".gov-head").getBoundingClientRect().height;
-      const titleH = probe.querySelector(".gov-section-title").getBoundingClientRect().height;
-      probe.remove();
-      const contentW = PAGE_W_PX - GOV_PAD * 2;
-      const bodyHeight = PAGE_H_PX - GOV_PAD * 2 - headerH - titleH - 10;
-      const budgetInfo = { bodyHeight, contentW };
-
-      const pageBodies = [
-        ...buildGeneralDataPage(state, result),
-        ...buildFindingsPages(state, budgetInfo, scratch, photoStore),
-        ...buildComponentReviewPages(state, budgetInfo, scratch),
-        ...buildQuantitySummaryPages(state, budgetInfo, scratch, result),
-        ...buildSurveyorNotesPage(result),
-        ...buildPhotoPages(collectPhotoItems(state, photoStore)),
-        ...buildSketchPages(state, photoStore),
-        ...buildQrAppendixPages(state),
-      ];
-
-      const total = pageBodies.length;
-      const pdf = new jspdf.jsPDF("l", "mm", "a4");
-      for (let i = 0; i < total; i++) {
-        const pageEl = document.createElement("div");
-        pageEl.className = "gov-page";
-        pageEl.innerHTML = govHeaderHTML(state, i + 1, total) + pageBodies[i];
-        container.appendChild(pageEl);
-        await decodeImages(pageEl);
-        const canvas = await html2canvas(pageEl, { scale: SCALE, backgroundColor: "#ffffff" });
-        if (i) pdf.addPage();
-        pdf.addImage(canvas.toDataURL("image/jpeg", JPEG_QUALITY), "JPEG", 0, 0, PAGE_W_MM, PAGE_H_MM);
-        pageEl.remove();
-      }
+      const pdf = await buildReportPdf(scratch, container);
       pdf.save(`דוח סקירה - ${state.name || state.number || "ללא שם"}.pdf`);
+    } finally {
+      scratch.remove();
+      container.remove();
+    }
+  }
+
+  // --- ייצוא חבילת ZIP: דוח הסקירה (PDF) + קובץ טעינה (JSON, כל מה שהוזן —
+  // בלי תמונות, כמו ה-state עצמו) — להעברה/שיתוף/גיבוי כקובץ אחד. קובץ
+  // הטעינה נטען בחזרה דרך "📂 טען מקובץ" בסרגל הכלים ---
+  async function exportZip() {
+    if (!hasAnyComponents()) { alert("אין נתונים לייצוא — הוסף רכיבים תחילה."); return; }
+    const scratch = makeScratch();
+    const container = document.createElement("div");
+    container.id = "gov-report";
+    document.body.appendChild(container);
+    const baseName = state.name || state.number || "ללא שם";
+    try {
+      const pdf = await buildReportPdf(scratch, container);
+      const zip = new JSZip();
+      zip.file(`דוח סקירה - ${baseName}.pdf`, pdf.output("blob"));
+      zip.file(`קובץ טעינה - ${baseName}.json`, JSON.stringify(state, null, 2));
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `סקירה - ${baseName}.zip`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
     } finally {
       scratch.remove();
       container.remove();
@@ -522,5 +557,5 @@ const PdfExport = (() => {
     }
   }
 
-  return { exportReport, exportSummary, exportIdCard };
+  return { exportReport, exportSummary, exportIdCard, exportZip };
 })();

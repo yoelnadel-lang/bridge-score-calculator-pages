@@ -181,6 +181,24 @@ function applyRecoveredState(newState) {
   update();
 }
 
+// --- טעינת סקירה מקובץ JSON (קובץ הטעינה שבתוך ה-ZIP, ר' pdf.js exportZip) ---
+function loadStateFromFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let parsed;
+    try { parsed = JSON.parse(reader.result); }
+    catch (e) { alert("הקובץ שנבחר אינו קובץ סקירה תקין (JSON פגום)."); return; }
+    if (!confirm("לטעון את הסקירה מהקובץ? זה יחליף את הנתונים הנוכחיים בטופס (לא כולל תמונות מצורפות — יש לצרף אותן מחדש).")) return;
+    state = migrateState(parsed);
+    bumpUidCounterPast(state);
+    drawingsFileAttached = false;
+    ui.activeSpan = 1; ui.activeComponent = null; ui.activeTab = "general"; ui.idCardTab = "general"; ui.openDefectForm = null;
+    update();
+  };
+  reader.onerror = () => alert("לא ניתן לקרוא את הקובץ שנבחר.");
+  reader.readAsText(file);
+}
+
 async function startQrScan() {
   qrScanReset();
   document.getElementById("qr-scan-panel").hidden = false;
@@ -945,7 +963,15 @@ function init() {
     runExport("btn-pdf-summary", "ייצוא התקציר", () => PdfExport.exportSummary()));
   document.getElementById("btn-pdf-idcard").addEventListener("click", () =>
     runExport("btn-pdf-idcard", "ייצוא תעודת הזהות", () => PdfExport.exportIdCard()));
+  document.getElementById("btn-pdf-zip").addEventListener("click", () =>
+    runExport("btn-pdf-zip", "ייצוא ה-ZIP", () => PdfExport.exportZip()));
   document.getElementById("btn-print").addEventListener("click", () => window.print());
+
+  document.getElementById("btn-load-file").addEventListener("click", () => document.getElementById("load-file-input").click());
+  document.getElementById("load-file-input").addEventListener("change", (e) => {
+    if (e.target.files[0]) loadStateFromFile(e.target.files[0]);
+    e.target.value = "";
+  });
 
   document.getElementById("btn-attach").addEventListener("click", () => document.getElementById("attach-dir-input").click());
   document.getElementById("btn-attach-files").addEventListener("click", () => document.getElementById("attach-files-input").click());

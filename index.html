@@ -15,6 +15,8 @@
   <div class="toolbar-bar">
     <div class="toolbar-actions">
       <button id="btn-example" class="btn">📂 טען דוגמה BR-11</button>
+      <button id="btn-load-file" class="btn" title="טעינת סקירה מקובץ JSON (קובץ הטעינה מתוך ה-ZIP)">📂 טען מקובץ</button>
+      <input type="file" id="load-file-input" hidden accept=".json,application/json">
       <button id="btn-attach" class="btn" title="שליפת קבצי תמונות/סקיצות מתיקיית הגשר, לפי הקוד שנרשם בכל שורה">📎 הוסף קבצים מצורפים</button>
       <button id="btn-attach-files" class="btn btn-sm" title="גיבוי לדפדפנים שלא תומכים בבחירת תיקייה שלמה">בחירת קבצים בודדים</button>
       <input type="file" id="attach-dir-input" webkitdirectory multiple hidden>
@@ -22,6 +24,7 @@
       <button id="btn-pdf-report" class="btn">📄 ייצוא דוח סקירה</button>
       <button id="btn-pdf-summary" class="btn">📊 ייצוא תקציר מנהלים</button>
       <button id="btn-pdf-idcard" class="btn">🪪 ייצוא ת.ז</button>
+      <button id="btn-pdf-zip" class="btn" title="קובץ ZIP אחד עם דוח הסקירה (PDF) וקובץ טעינה (JSON) — להעברה, שיתוף או גיבוי">📦 ייצוא סקירה (ZIP)</button>
       <button id="btn-scan-qr" class="btn" title="שחזור נתונים מקוד QR שהודפס בדוח קודם — לא כולל תמונות">📷 שחזור מ-QR</button>
       <button id="btn-print" class="btn">🖨️ הדפסת דוח</button>
       <button id="btn-reset" class="btn btn-danger">🗑️ איפוס</button>
@@ -352,6 +355,9 @@
         <li><strong>📄 ייצוא דוח סקירה</strong> — הדוח הרשמי (A4 לרוחב), כולל נספחי תמונות, תרשימים וקוד שחזור.</li>
         <li><strong>📊 ייצוא תקציר מנהלים</strong> — מסמך נפרד עם מדי המצב.</li>
         <li><strong>🪪 ייצוא ת.ז</strong> — תעודת הזהות של המבנה.</li>
+        <li><strong>📦 ייצוא סקירה (ZIP)</strong> — קובץ אחד שמכיל גם את דוח הסקירה (PDF) וגם <strong>קובץ טעינה</strong>
+          (JSON) של כל הנתונים שהוזנו. שולחים את קובץ ה-ZIP למישהו (במייל, בוואטסאפ, בענן) — הוא מקבל גם את
+          הדוח לקריאה וגם אפשרות לטעון את הסקירה עצמה למערכת ולהמשיך לערוך אותה.</li>
       </ul>
       <p class="hint">כדאי לצרף את התמונות <em>לפני</em> הייצוא — אחרת נספח התמונות ייצא ריק.</p>
 
@@ -373,7 +379,9 @@
         <li>הנתונים נשמרים <strong>אוטומטית בדפדפן</strong> אחרי כל שינוי, וממתינים גם אחרי סגירת הדף.</li>
         <li>השמירה היא <strong>למחשב ולדפדפן הזה בלבד</strong> — לא לענן ולא משותפת בין מכשירים.</li>
         <li><strong>🗑️ איפוס</strong> מוחק את כל הנתונים ומנתק את הקבצים המצורפים. אין ביטול — מומלץ לייצא דוח קודם.</li>
-        <li>הגיבוי הבטוח ביותר הוא <strong>הדוח המודפס עצמו</strong>: קוד השחזור שבסופו מאפשר לטעון הכל מחדש.</li>
+        <li>שני גיבויים בטוחים: <strong>הדוח המודפס עצמו</strong> (קוד השחזור שבסופו מאפשר לטעון הכל מחדש), או
+          קובץ הטעינה שבתוך <strong>📦 ייצוא סקירה (ZIP)</strong> — נטען בחזרה עם <strong>📂 טען מקובץ</strong>
+          בסרגל העליון. שני האמצעים נושאים את כל הנתונים <em>חוץ מהתמונות</em>, שיש לצרף מחדש בכל פעם.</li>
       </ul>
 
     </div>
@@ -399,6 +407,7 @@
 <script src="vendor/pako.min.js" defer></script>
 <script src="vendor/qrcode.js" defer></script>
 <script src="vendor/jsQR.js" defer></script>
+<script src="vendor/jszip.min.js" defer></script>
 <script src="recovery.js" defer></script>
 <script src="pdf.js" defer></script>
 </body>

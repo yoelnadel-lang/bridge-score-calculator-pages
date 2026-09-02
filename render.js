@@ -43,7 +43,7 @@ function renderFindingPhotos(state, photoStore) {
     </td>
     <td><button class="btn btn-sm btn-danger" data-action="finding-remove" data-finding="${f.uid}">✕</button></td>
   </tr>`).join("");
-  return `<table class="subs-table"><tr><th>מס"ד</th><th>תיאור הממצאים</th><th>שם התמונה</th><th></th></tr>${rows}</table>
+  return `<table class="subs-table findings-table"><tr><th>מס"ד</th><th>תיאור הממצאים</th><th>שם התמונה</th><th></th></tr>${rows}</table>
     <button class="btn btn-sm" data-action="finding-add">➕ הוסף שורת תיעוד</button>`;
 }
 
@@ -78,7 +78,7 @@ function renderSurveyorNotes(notes) {
     <td><input type="text" value="${esc(n.text)}" data-action="note-text" data-list="surveyorNotes" data-note="${n.uid}" placeholder="הערה חופשית"></td>
     <td><button class="btn btn-sm btn-danger" data-action="note-remove" data-list="surveyorNotes" data-note="${n.uid}">✕</button></td>
   </tr>`).join("");
-  return `<table class="subs-table"><tr><th>מס"ד</th><th>הערות הסוקר</th><th></th></tr>${rows}</table>
+  return `<table class="subs-table surveyor-notes-table"><tr><th>מס"ד</th><th>הערות הסוקר</th><th></th></tr>${rows}</table>
     <button class="btn btn-sm" data-action="note-add" data-list="surveyorNotes">➕ הוסף הערה</button>`;
 }
 
