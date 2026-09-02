@@ -24,6 +24,10 @@ const TAB_SECTION = {
 // רשימות הערות חופשיות (תאריך+טקסט) המשותפות לכמה לשוניות — data-list בכל
 // שורה קובע לאיזו מהן היא שייכת, כך שמטפל אירועים אחד משרת את כולן.
 const NOTE_LISTS = ["changeNotes", "surveyorNotes", "engineerNotes", "communicationNotes"];
+const NOTE_CONTAINERS = {
+  changeNotes: "change-notes", surveyorNotes: "surveyor-notes",
+  engineerNotes: "engineer-notes", communicationNotes: "communication-notes",
+};
 const ui = { activeSpan: 1, activeTab: "general", activeComponent: null, openDefectForm: null, draft: null, idCardTab: "general" };
 
 // --- מאגר קבצים מצורפים (תמונות/סקיצות) — session בלבד, לא נשמר ב-localStorage:
@@ -36,6 +40,20 @@ const photoStore = new Map();
 // בתוכן עצמו, רק סימון session-בלבד (כמו photoStore) שקובץ נבחר בפועל,
 // כדי להבדיל מהקלדה ידנית של שם קובץ בלי שנבחר קובץ אמיתי.
 let drawingsFileAttached = false;
+
+// קורא ישירות מה-DOM את מה שהוקלד בשורות של רשימה, לפני פעולה שמרנדרת אותה
+// מחדש (הוספת שורה). אירוע ה-change של שדה תלוי ב-blur, וסדר blur/click אינו
+// מובטח — בלי זה לחיצה על "הוסף שורה" מיד אחרי הקלדה מאבדת את ההקלדה האחרונה.
+function flushRowInputs(containerId, list, uidAttr, actionToKey) {
+  const root = document.getElementById(containerId);
+  if (!root) return;
+  for (const [action, key] of Object.entries(actionToKey)) {
+    root.querySelectorAll(`[data-action="${action}"]`).forEach((inp) => {
+      const item = list.find((x) => x.uid === inp.dataset[uidAttr]);
+      if (item) item[key] = inp.value;
+    });
+  }
+}
 
 function parsePhotoCodes(str) {
   return String(str || "").split(";").map((s) => s.trim()).filter(Boolean);
@@ -154,6 +172,9 @@ function applyRecoveredState(newState) {
   }
   state = newState;
   bumpUidCounterPast(state);
+  // הסימון ✔ שייך לקובץ שנבחר בסשן הנוכחי — הנתונים המשוחזרים נושאים רק את
+  // שם הקובץ, ולכן הסימון חייב להתאפס כדי לא להצהיר על קובץ שלא נבחר
+  drawingsFileAttached = false;
   ui.activeSpan = 1; ui.activeComponent = null; ui.activeTab = "general"; ui.idCardTab = "general"; ui.openDefectForm = null;
   closeQrScan();
   update();
@@ -556,7 +577,7 @@ function loadExample() {
       const comp = {
         uid: nextUid(), catalogId: null, name: c.name, importance: c.importance,
         unit: null, unit2: null, surveyed: true,
-        subs: c.subs.map((s) => ({ id: s.id, size: s.size, note: "" })), defects: [],
+        subs: c.subs.map((s) => ({ id: s.id, size: s.size, size2: null, note: "" })), defects: [],
       };
       comp.defects = span.defects.filter((d) => d.comp === c.name).map((d) => ({
         uid: nextUid(), family: d.def ? +String(d.def).split(".")[0] : null,
@@ -566,7 +587,10 @@ function loadExample() {
       return comp;
     }),
   }));
-  state = st; ui.activeSpan = 1; ui.activeComponent = null; ui.activeTab = "results"; ui.openDefectForm = null;
+  state = st;
+  drawingsFileAttached = false;   // הדוגמה לא נושאת קובץ תרשימים שנבחר בסשן
+  ui.activeSpan = 1; ui.activeComponent = null; ui.activeTab = "results";
+  ui.idCardTab = "general"; ui.openDefectForm = null;
   update();
 }
 
@@ -672,17 +696,9 @@ function init() {
     else if (action === "comp-select") { ui.activeComponent = compUid; ui.openDefectForm = null; scheduleUpdate(); }
     else if (action === "idcard-tab") { ui.idCardTab = el.dataset.group; scheduleUpdate(); }
     else if (action === "finding-add") {
-      // קריאה ישירה מה-DOM לפני ההוספה — לא סומכים על שאירוע ה-change של
-      // השדה שהיה פוקוס בו הספיק להירשם קודם (תלוי בתזמון blur/click בפועל).
-      // כך לחיצה אחת גם שומרת את מה שהוקלד וגם פותחת שורה חדשה עם פוקוס מיידי.
-      document.querySelectorAll('#finding-photos [data-action="finding-desc"]').forEach((inp) => {
-        const f = state.findingPhotos.find((x) => x.uid === inp.dataset.finding);
-        if (f) f.desc = inp.value;
-      });
-      document.querySelectorAll('#finding-photos [data-action="finding-photo"]').forEach((inp) => {
-        const f = state.findingPhotos.find((x) => x.uid === inp.dataset.finding);
-        if (f) f.photo = inp.value;
-      });
+      // לחיצה אחת גם שומרת את מה שהוקלד וגם פותחת שורה חדשה עם פוקוס מיידי
+      flushRowInputs("finding-photos", state.findingPhotos, "finding",
+        { "finding-desc": "desc", "finding-photo": "photo" });
       const uid = nextUid();
       state.findingPhotos.push({ uid, desc: "", photo: "" });
       scheduleUpdate(() => {
@@ -694,19 +710,11 @@ function init() {
       state.findingPhotos = state.findingPhotos.filter((f) => f.uid !== el.dataset.finding); scheduleUpdate();
     }
     else if (action === "sketch-add") {
-      // אותו תיקון כמו "הוסף שורת תיעוד" בממצאים: קריאה ישירה מה-DOM לפני
-      // ההוספה במקום להסתמך על שה-change של השדה הפוקוס-בו הספיק להירשם —
-      // כך לחיצה אחת גם שומרת וגם פותחת שורה חדשה. קוד הסקיצה מקבל כברירת
+      // כמו בממצאים: לחיצה אחת שומרת ופותחת שורה חדשה. קוד הסקיצה מקבל כברירת
       // מחדל את המספר הרץ הבא (001, 002, …) לפי הקוד המספרי הגבוה ביותר
       // הקיים כרגע — ונשאר ניתן לעריכה מלאה.
-      document.querySelectorAll('#sketches [data-action="sketch-code"]').forEach((inp) => {
-        const s = state.sketches.find((x) => x.uid === inp.dataset.sketch);
-        if (s) s.code = inp.value;
-      });
-      document.querySelectorAll('#sketches [data-action="sketch-caption"]').forEach((inp) => {
-        const s = state.sketches.find((x) => x.uid === inp.dataset.sketch);
-        if (s) s.caption = inp.value;
-      });
+      flushRowInputs("sketches", state.sketches, "sketch",
+        { "sketch-code": "code", "sketch-caption": "caption" });
       let maxCode = 0;
       for (const s of state.sketches) {
         const n = parseInt((s.code || "").trim(), 10);
@@ -723,7 +731,17 @@ function init() {
       state.sketches = state.sketches.filter((s) => s.uid !== el.dataset.sketch); scheduleUpdate();
     }
     else if (action === "note-add" && NOTE_LISTS.includes(el.dataset.list)) {
-      state[el.dataset.list].push({ uid: nextUid(), date: todayISO(), text: "" }); scheduleUpdate();
+      // אותה בעיה בדיוק שתוקנה בממצאים ובסקיצות — ההערה שהוקלדה זה עתה אבדה
+      // אם ה-change לא הספיק להירשם לפני הלחיצה על "הוסף הערה"
+      const list = el.dataset.list;
+      flushRowInputs(NOTE_CONTAINERS[list], state[list], "note",
+        { "note-date": "date", "note-text": "text" });
+      const uid = nextUid();
+      state[list].push({ uid, date: todayISO(), text: "" });
+      scheduleUpdate(() => {
+        const inp = document.querySelector(`[data-action="note-text"][data-note="${uid}"]`);
+        if (inp) inp.focus();
+      });
     }
     else if (action === "note-remove" && NOTE_LISTS.includes(el.dataset.list)) {
       const list = el.dataset.list;
@@ -939,7 +957,15 @@ function init() {
     e.target.value = "";
   });
   document.getElementById("btn-reset").addEventListener("click", () => {
-    if (confirm("לאפס את כל הנתונים?")) { state = defaultState(); ui.activeSpan = 1; ui.activeComponent = null; ui.activeTab = "general"; ui.openDefectForm = null; update(); }
+    if (!confirm("לאפס את כל הנתונים? גם הקבצים המצורפים בסשן הנוכחי ינותקו.")) return;
+    state = defaultState();
+    // מצב ה-session מתאפס יחד עם הנתונים: אחרת תגיות "צורף"/"✔ קובץ הועלה"
+    // ימשיכו להצהיר על קבצים של המבנה הקודם
+    photoStore.clear();
+    drawingsFileAttached = false;
+    ui.activeSpan = 1; ui.activeComponent = null; ui.activeTab = "general";
+    ui.idCardTab = "general"; ui.openDefectForm = null;
+    update();
   });
 
   document.getElementById("btn-scan-qr").addEventListener("click", startQrScan);

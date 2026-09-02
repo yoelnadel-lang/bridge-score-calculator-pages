@@ -25,7 +25,7 @@ function serializeForRecovery(state) {
       s.id, s.dim, s.dimNote,
       s.components.map((c) => [
         c.uid, c.catalogId, c.name, c.importance, c.unit, c.unit2, c.surveyed,
-        c.subs.map((su) => [su.id, su.size, su.note]),
+        c.subs.map((su) => [su.id, su.size, su.note, su.size2 ?? null]),
         c.defects.map((d) => [d.uid, d.family, d.def, d.sub, d.s, d.ex, d.note, d.photo]),
       ]),
     ]),
@@ -59,7 +59,9 @@ function deserializeFromRecovery(c) {
     id, dim, dimNote,
     components: comps.map(([uid, catalogId, name, importance, unit, unit2, surveyed, subs, defects]) => ({
       uid, catalogId, name, importance, unit, unit2, surveyed,
-      subs: subs.map(([sid, size, note]) => ({ id: sid, size, note })),
+      // size2 (מידה משנית) נוסף אחרי הגרסה הראשונה — קוד ישן פשוט לא נושא
+      // אותו באיבר הרביעי, ואז הוא נטען null במקום להיאבד בשקט
+      subs: subs.map(([sid, size, note, size2]) => ({ id: sid, size, note, size2: size2 ?? null })),
       defects: defects.map(([duid, family, def, sub, s, ex, note, photo]) => ({ uid: duid, family, def, sub, s, ex, note, photo })),
     })),
   }));
