@@ -82,10 +82,10 @@ const PdfExport = (() => {
     const rows = [
       ["מספר המבנה", `<span dir="ltr">${esc(state.number || "—")}</span>`, "שם המבנה", esc(state.name || "—")],
       ["שם המזמין", esc(state.client || "—"), "מתכנן המבנה", esc(state.designer || "—")],
-      ["כביש מס'", `<span dir="ltr">${esc(state.roadNumber || "—")}</span>`, "קואורדינטות", `<span dir="ltr">${esc(state.coordinates || "—")}</span>`],
+      ["כביש מס'", `<span dir="ltr">${esc(state.roadNumber || "—")}</span>`, "קואורדינטה X", `<span dir="ltr">${esc(state.coordX || "—")}</span>`],
+      ["קואורדינטה Y", `<span dir="ltr">${esc(state.coordY || "—")}</span>`, "סוג הסקירה", esc(state.surveyType || "—")],
       ["סיווג ראשי", esc(STRUCTURE_CLASSES[state.structureClass].label), "מספר מפתחים / יחידות", String(state.spanCount)],
       ["שם הסוקר", esc(state.surveyorName || "—"), "שם החברה", esc(state.companyName || "—")],
-      ["סוג הסקירה", esc(state.surveyType || "—"), "", ""],
       ["תאריך הסקירה הנוכחית", esc(state.inspDate || "—"), "תאריך הסקירה הבאה (מומלץ)", insp ? fmtDate(insp.effective) : "—"],
       ["CPI Average", fmt(result.bridge.method_norm.cpiAv), "CPI Critical", fmt(result.bridge.cpiCrit)],
     ];

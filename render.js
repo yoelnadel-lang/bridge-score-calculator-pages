@@ -98,8 +98,14 @@ function idCardAutoFields(groupId, state, result) {
     return [
       { code: "1.1", label: "מספר המבנה", value: state.number },
       { code: "1.2", label: "שם המבנה", value: state.name },
+      { code: "1.6", label: "כביש", value: state.roadNumber || "—" },
+      { code: "1.10", label: "קואורדינטה Y", value: state.coordY || "—" },
+      { code: "1.11", label: "קואורדינטה X", value: state.coordX || "—" },
       { code: "2.1", label: "קבוצת סווג ראשית", value: state.structureClass },
     ];
+  }
+  if (groupId === "service") {
+    return [{ code: "3.21", label: "מתכנן מקורי", value: state.designer || "—" }];
   }
   if (groupId === "geometry") {
     return [{ code: "4.1", label: "מספר מפתחים", value: state.spanCount }];
