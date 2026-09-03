@@ -20,6 +20,8 @@ function serializeForRecovery(state) {
       sp: state.superType, tt: state.tunnelType, ic: state.inspClass,
       id: state.inspDate, pd: state.prevInspDate,
       sn: state.surveyorName, cn: state.companyName, sc: state.spanCount,
+      ord: state.client, sty: state.surveyType, dsn: state.designer,
+      crd: state.coordinates, rn: state.roadNumber,
     },
     spans: state.spans.map((s) => [
       s.id, s.dim, s.dimNote,
@@ -54,6 +56,10 @@ function deserializeFromRecovery(c) {
     superType: c.st.sp, tunnelType: c.st.tt, inspClass: c.st.ic,
     inspDate: c.st.id, prevInspDate: c.st.pd,
     surveyorName: c.st.sn, companyName: c.st.cn, spanCount: c.st.sc,
+    // שדות שנוספו אחרי הגרסה הראשונה — קוד ישן פשוט לא נושא אותם, אז נופלים
+    // חזרה לברירת המחדל (כולל "שגרתית" לסוג הסקירה) במקום להיטען כ-undefined
+    client: c.st.ord || "", surveyType: c.st.sty || st.surveyType,
+    designer: c.st.dsn || "", coordinates: c.st.crd || "", roadNumber: c.st.rn || "",
   });
   st.spans = c.spans.map(([id, dim, dimNote, comps]) => ({
     id, dim, dimNote,

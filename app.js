@@ -295,6 +295,7 @@ function defaultState() {
     name: "", number: "", structureClass: "BRG", superType: 4, tunnelType: null,
     inspClass: "", inspDate: todayISO(), prevInspDate: "",
     surveyorName: "", companyName: "",
+    client: "", surveyType: "שגרתית", designer: "", coordinates: "", roadNumber: "",
     immediateAttention: { text: "", photo: "" },
     findingPhotos: requiredFindingsFor("BRG"), sketches: [], drawingsFile: "",
     changeNotes: [], surveyorNotes: [], engineerNotes: [], communicationNotes: [],
@@ -507,6 +508,11 @@ function update() {
   document.getElementById("st-number").value = state.number;
   document.getElementById("st-surveyor").value = state.surveyorName;
   document.getElementById("st-company").value = state.companyName;
+  document.getElementById("st-client").value = state.client;
+  document.getElementById("st-survey-type").value = state.surveyType;
+  document.getElementById("st-designer").value = state.designer;
+  document.getElementById("st-coordinates").value = state.coordinates;
+  document.getElementById("st-road-number").value = state.roadNumber;
   document.getElementById("st-class").value = state.structureClass;
   document.getElementById("st-supertype-combo").innerHTML = Combobox.html({
     id: "st-supertype", action: "st-supertype", value: state.superType,
@@ -656,6 +662,11 @@ function init() {
   document.getElementById("st-number").addEventListener("input", (e) => { state.number = e.target.value; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); });
   document.getElementById("st-surveyor").addEventListener("input", (e) => { state.surveyorName = e.target.value; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); });
   document.getElementById("st-company").addEventListener("input", (e) => { state.companyName = e.target.value; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); });
+  document.getElementById("st-client").addEventListener("input", (e) => { state.client = e.target.value; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); });
+  document.getElementById("st-survey-type").addEventListener("input", (e) => { state.surveyType = e.target.value; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); });
+  document.getElementById("st-designer").addEventListener("input", (e) => { state.designer = e.target.value; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); });
+  document.getElementById("st-coordinates").addEventListener("input", (e) => { state.coordinates = e.target.value; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); });
+  document.getElementById("st-road-number").addEventListener("input", (e) => { state.roadNumber = e.target.value; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); });
   document.getElementById("drawings-file").addEventListener("input", (e) => {
     state.drawingsFile = e.target.value;
     // עריכה ידנית של שם הקובץ אחרי שנבחר קובץ אמיתי — הסימון ✔ כבר לא מדויק
