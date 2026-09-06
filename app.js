@@ -12,12 +12,12 @@ let state = defaultState();
 // סדר לפי מסך "סקירות לגשרים" ב-BMS: כללי · שינויים · ממצאים · רכיבים ·
 // סוקר · מהנדס · תרשימים · תקשורת — ואחריהם תוצאות ותקציר מנהלים, שאין
 // להם מקבילה ב-BMS.
-const SEC_TABS = ["general", "changes", "findings", "components", "surveyor", "engineer", "drawings", "communication", "results", "summary", "idcard", "control", "help"];
+const SEC_TABS = ["general", "changes", "findings", "components", "survey", "surveyor", "engineer", "drawings", "communication", "results", "summary", "idcard", "control", "help"];
 // לשונית יכולה להציג יותר מפאנל אחד — "כללי" מציגה את פרטי המבנה ומתחתיהם
 // את "תשומת לב מיידית".
 const TAB_SECTION = {
   general: ["sec-structure", "sec-attention"], changes: ["sec-changes"], findings: ["sec-findings"],
-  components: ["sec-components"], surveyor: ["sec-surveyor"], engineer: ["sec-engineer"],
+  components: ["sec-components"], survey: ["sec-survey"], surveyor: ["sec-surveyor"], engineer: ["sec-engineer"],
   drawings: ["sec-drawings"], communication: ["sec-communication"],
   results: ["sec-results"], summary: ["sec-summary"], idcard: ["sec-idcard"],
   control: ["sec-control"], help: ["sec-help"],
@@ -29,7 +29,7 @@ const NOTE_CONTAINERS = {
   changeNotes: "change-notes", surveyorNotes: "surveyor-notes",
   engineerNotes: "engineer-notes", communicationNotes: "communication-notes",
 };
-const ui = { activeSpan: 1, activeTab: "general", activeComponent: null, openDefectForm: null, draft: null, idCardTab: "general" };
+const ui = { activeTab: "general", openDefectForm: null, draft: null, idCardTab: "general", compTab: "summary", addCompSpan: null };
 
 // --- מאגר קבצים מצורפים (תמונות/סקיצות) — session בלבד, לא נשמר ב-localStorage:
 // תמונות שוקלות מגה-בייטים והמכסה כ-5MB. מצורפות מחדש בכל טעינה, ממש לפני
@@ -176,7 +176,7 @@ function applyRecoveredState(newState) {
   // הסימון ✔ שייך לקובץ שנבחר בסשן הנוכחי — הנתונים המשוחזרים נושאים רק את
   // שם הקובץ, ולכן הסימון חייב להתאפס כדי לא להצהיר על קובץ שלא נבחר
   drawingsFileAttached = false;
-  ui.activeSpan = 1; ui.activeComponent = null; ui.activeTab = "general"; ui.idCardTab = "general"; ui.openDefectForm = null;
+  ui.activeTab = "general"; ui.idCardTab = "general"; ui.compTab = "summary"; ui.openDefectForm = null;
   closeQrScan();
   update();
 }
@@ -192,7 +192,7 @@ function loadStateFromFile(file) {
     state = migrateState(parsed);
     bumpUidCounterPast(state);
     drawingsFileAttached = false;
-    ui.activeSpan = 1; ui.activeComponent = null; ui.activeTab = "general"; ui.idCardTab = "general"; ui.openDefectForm = null;
+    ui.activeTab = "general"; ui.idCardTab = "general"; ui.compTab = "summary"; ui.openDefectForm = null;
     update();
   };
   reader.onerror = () => alert("לא ניתן לקרוא את הקובץ שנבחר.");
@@ -329,29 +329,25 @@ function migrateState(s) {
 }
 
 // --- עזרי מצב ---
-function activeSpanObj() {
-  return state.spans.find((s) => s.id === ui.activeSpan) || state.spans[0];
-}
 function findComp(uid) {
   for (const s of state.spans)
     for (const c of s.components) if (c.uid === uid) return { span: s, comp: c };
   return null;
+}
+function findSpan(spanId) {
+  return state.spans.find((s) => s.id === +spanId) || state.spans[0];
 }
 function syncSpanCount() {
   const n = Math.max(1, Math.min(MAX_SPANS, +state.spanCount || 1));
   state.spanCount = n;
   while (state.spans.length < n) state.spans.push({ id: state.spans.length + 1, dim: "", dimNote: "", components: [] });
   while (state.spans.length > n) state.spans.pop();
-  if (ui.activeSpan > n) ui.activeSpan = 1;
-}
-// מוודא ש-ui.activeComponent מצביע על רכיב קיים במפתח הפעיל — נקרא בכל update()
-function syncActiveComponent() {
-  const comps = activeSpanObj().components;
-  if (!comps.some((c) => c.uid === ui.activeComponent)) ui.activeComponent = comps[0] ? comps[0].uid : null;
 }
 
-// --- הוספת רכיב מהקטלוג --- (מחזירה את ה-uid החדש; הרינדור באחריות הקורא)
-function addComponent(catalogId) {
+// --- פענוח פרטי רכיב מהקטלוג, כולל רזולוציית ראשי/משני דינמית לפי טבלה 2/6 —
+// משותף להוספת רכיב חדש ולשינוי סוג של רכיב קיים (comp-change-type) ---
+// מחזיר {name, unit, unit2, importance, displayId} או null (עם alert אם רלוונטי)
+function resolveCatalogDef(catalogId) {
   const catalog = COMPONENT_CATALOGS[state.structureClass];
   const def = catalog.find((c) => String(c.id) === String(catalogId));
   if (!def) return null;
@@ -369,13 +365,21 @@ function addComponent(catalogId) {
     if (part) { displayId = part.code; name = part.name; unit = part.unit; unit2 = part.unit2 || null; }
     else if (def.dynamic === "secondary") { alert("לסוג המבנה שנבחר אין רכיב משני (טבלה 2)"); return null; }
   }
+  return { name, unit, unit2, importance: def.imp, displayId };
+}
+
+// --- הוספת רכיב מהקטלוג --- (מחזירה את ה-uid החדש; הרינדור באחריות הקורא)
+function addComponent(catalogId, spanId) {
+  const resolved = resolveCatalogDef(catalogId);
+  if (!resolved) return null;
   const uid = nextUid();
   // ברירת המחדל של הנוהל: רכיב ללא פגם רשום נחשב תקין (1A) — לכן כל רכיב
   // חדש מתחיל עם רשומת "רכיב תקין" מפורשת (כמו לחיצה על "✔️ רכיב תקין"),
   // ולא עם רשימת פגמים ריקה. saveDraft() מסיר אותה אוטומטית ברגע שנוסף פגם
   // אמיתי, כדי שלא תופיע יחד איתו בטבלה.
-  activeSpanObj().components.push({
-    uid, catalogId: displayId, name, importance: def.imp, unit, unit2,
+  findSpan(spanId).components.push({
+    uid, catalogId: resolved.displayId, name: resolved.name, importance: resolved.importance,
+    unit: resolved.unit, unit2: resolved.unit2,
     surveyed: true, subs: [{ id: 1, size: 1, size2: null, note: "" }],
     defects: [{ uid: nextUid(), family: null, def: null, sub: 1, s: 1, ex: "A", note: "רכיב תקין", photo: "" }],
   });
@@ -498,7 +502,6 @@ function restoreFocus(f) {
 function update() {
   const focused = captureFocus();
   syncSpanCount();
-  syncActiveComponent();
 
   document.getElementById("breadcrumb").innerHTML = renderBreadcrumb(state);
   document.querySelectorAll("#sec-tabs .sec-tab").forEach((btn) => {
@@ -575,14 +578,14 @@ function update() {
   document.getElementById("idcard-photo").value = state.idCardMainPhoto;
   document.getElementById("control-audit").innerHTML = renderControlAudit(state, result);
 
-  document.getElementById("add-comp-combo").innerHTML = Combobox.html({
-    id: "add-comp", action: "add-comp", options: componentComboOptions(state),
-    placeholder: "— בחר רכיב מהקטלוג (הקלד קוד או שם) —",
-  });
-  document.getElementById("span-tabs").innerHTML = renderSpanTabs(state, ui.activeSpan);
-  document.getElementById("add-comp-span").innerHTML = renderAddCompSpanOptions(state, ui.activeSpan);
-  document.getElementById("comp-master").innerHTML = renderComponentMasterList(activeSpanObj(), ui);
-  document.getElementById("comp-detail").innerHTML = renderComponentDetail(activeSpanObj(), ui, photoStore);
+  document.getElementById("comp-tabs").innerHTML = renderCompTabs(ui.compTab);
+  const compSummaryEl = document.getElementById("comp-summary");
+  const compDetailEl = document.getElementById("comp-detail-list");
+  compSummaryEl.hidden = ui.compTab !== "summary";
+  compDetailEl.hidden = ui.compTab !== "detail";
+  if (ui.compTab === "summary") compSummaryEl.innerHTML = renderComponentsSummary(state, ui);
+  else compDetailEl.innerHTML = renderComponentsDetailList(state);
+  document.getElementById("structure-survey").innerHTML = renderStructureSurvey(state, ui, photoStore);
 
   document.getElementById("results").innerHTML = renderResults(state, result);
   document.getElementById("summary").innerHTML = renderSummary(state, result, summary);
@@ -621,8 +624,7 @@ function loadExample() {
   }));
   state = st;
   drawingsFileAttached = false;   // הדוגמה לא נושאת קובץ תרשימים שנבחר בסשן
-  ui.activeSpan = 1; ui.activeComponent = null; ui.activeTab = "results";
-  ui.idCardTab = "general"; ui.openDefectForm = null;
+  ui.activeTab = "results"; ui.idCardTab = "general"; ui.compTab = "summary"; ui.openDefectForm = null;
   update();
 }
 
@@ -729,9 +731,8 @@ function init() {
     const action = el.dataset.action;
     const compEl = el.closest("[data-comp]");
     const compUid = compEl ? compEl.dataset.comp : null;
-    if (action === "span-tab") { ui.activeSpan = +el.dataset.span; ui.activeComponent = null; ui.openDefectForm = null; scheduleUpdate(); }
-    else if (action === "sec-tab") { ui.activeTab = el.dataset.tab; scheduleUpdate(); }
-    else if (action === "comp-select") { ui.activeComponent = compUid; ui.openDefectForm = null; scheduleUpdate(); }
+    if (action === "sec-tab") { ui.activeTab = el.dataset.tab; scheduleUpdate(); }
+    else if (action === "comp-tab") { ui.compTab = el.dataset.comptab; scheduleUpdate(); }
     else if (action === "idcard-tab") { ui.idCardTab = el.dataset.group; scheduleUpdate(); }
     else if (action === "finding-add") {
       // לחיצה אחת גם שומרת את מה שהוקלד וגם פותחת שורה חדשה עם פוקוס מיידי
@@ -942,20 +943,50 @@ function init() {
         if (d) { d.photo = el.value; scheduleUpdate(); }
       }
     }
-    else if (action === "add-comp-span") { ui.activeSpan = +el.value; ui.activeComponent = null; ui.openDefectForm = null; scheduleUpdate(); }
+    else if (action === "add-comp-span") { ui.addCompSpan = +el.value; scheduleUpdate(); }
     else if (action === "add-comp") {
-      // בחירה בקומבו = הוספה מיידית (בלי כפתור), למפתח שנבחר ב"הוספה למפתח" —
+      // בחירה בקומבו = הוספה מיידית (בלי כפתור), למפתח שנבחר ב"למפתח" לצידה —
       // והפוקוס עובר קודם לכמות הרכיבים (לא למידה) כדי שסדר המילוי הטבעי
       // יהיה קודם "כמה יש" ורק אז "כמה מודד כל אחד"
       const v = el.value;
       if (v) {
         Combobox.setValue("add-comp", "");
-        const uid = addComponent(v);
-        if (uid) ui.activeComponent = uid;   // הרכיב החדש נבחר מיד ברשימת-האב
+        const spanId = ui.addCompSpan || state.spans[0].id;
+        const uid = addComponent(v, spanId);
         scheduleUpdate(uid ? () => {
           const inp = document.querySelector(`[data-comp="${uid}"] input[data-action="comp-qty"]`);
           if (inp) { inp.focus(); inp.select(); }
         } : undefined);
+      }
+    }
+    else if (action === "comp-move-span") {
+      const f = findComp(compUid);
+      const newSpan = findSpan(+el.value);
+      if (f && newSpan && f.span !== newSpan) {
+        f.span.components = f.span.components.filter((c) => c.uid !== compUid);
+        newSpan.components.push(f.comp);
+        scheduleUpdate();
+      }
+    }
+    else if (action === "comp-change-type") {
+      const f = findComp(compUid);
+      const v = el.value;
+      if (f && v) {
+        const resolved = resolveCatalogDef(v);
+        if (resolved) {
+          const hasReal = f.comp.defects.some((d) => d.note !== "רכיב תקין");
+          if (hasReal && !confirm('שינוי סוג הרכיב ימחק את כל רשומות הפגם הקיימות (לא רלוונטיות לסוג החדש). להמשיך?')) {
+            scheduleUpdate();  // מחזיר את הקומבו לערך הקודם
+            return;
+          }
+          f.comp.catalogId = resolved.displayId;
+          f.comp.name = resolved.name;
+          f.comp.importance = resolved.importance;
+          f.comp.unit = resolved.unit;
+          f.comp.unit2 = resolved.unit2;
+          f.comp.defects = [{ uid: nextUid(), family: null, def: null, sub: f.comp.subs[0].id, s: 1, ex: "A", note: "רכיב תקין", photo: "" }];
+        }
+        scheduleUpdate();
       }
     }
     else if (action === "st-supertype") { state.superType = +el.value; scheduleUpdate(); }
@@ -1009,8 +1040,7 @@ function init() {
     // ימשיכו להצהיר על קבצים של המבנה הקודם
     photoStore.clear();
     drawingsFileAttached = false;
-    ui.activeSpan = 1; ui.activeComponent = null; ui.activeTab = "general";
-    ui.idCardTab = "general"; ui.openDefectForm = null;
+    ui.activeTab = "general"; ui.idCardTab = "general"; ui.compTab = "summary"; ui.openDefectForm = null;
     update();
   });
 

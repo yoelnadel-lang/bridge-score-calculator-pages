@@ -313,6 +313,36 @@ function componentComboOptions(state) {
   });
 }
 
+// --- זיהוי הפוך: איזה ערך קטלוג (c.id) הניב את comp.catalogId הנוכחי —
+// נדרש כדי למלא מראש את קומבו "שינוי סוג" בטבלת "סיכום רכיבים" (כי לרכיבים
+// דינמיים catalogId הוא הקוד המפוענח מטבלה 2/6, לא ה-id הגולמי בקטלוג) ---
+function catalogValueForComponent(state, comp) {
+  const catalog = COMPONENT_CATALOGS[state.structureClass] || [];
+  const isTun = state.structureClass === "TUN";
+  const types = isTun ? TUNNEL_TYPES : SUPERSTRUCTURE_TYPES;
+  const t = types.find((x) => x.id === +(isTun ? state.tunnelType : state.superType));
+  for (const c of catalog) {
+    if (c.dynamic) {
+      const part = t && t[c.dynamic === "main" ? "main" : "secondary"];
+      if (part && part.code === comp.catalogId) return c.id;
+    } else if (String(c.id) === String(comp.catalogId)) {
+      return c.id;
+    }
+  }
+  return "";
+}
+
+// --- אפשרויות הקומבו של שורת רכיב קיים בטבלת "סיכום רכיבים": אם הרכיב לא
+// מזוהה מול אף ערך בקטלוג הנוכחי (למשל רכיב מדוגמת BR-11 או קוד ישן ללא
+// catalogId) — מוסיפים אפשרות סינתטית עם השם הקיים כדי לא "לאבד" אותו
+// מהתצוגה; בחירה מחדש בה אינה עושה כלום (אין לה ערך קטלוג אמיתי) ---
+function componentComboOptionsForRow(state, comp) {
+  const options = componentComboOptions(state);
+  if (catalogValueForComponent(state, comp)) return options;
+  const label = `${comp.catalogId != null ? comp.catalogId + ". " : ""}${comp.name}`;
+  return [{ value: "__current__", label, group: "הרכיב הנוכחי (לא מזוהה בקטלוג)" }, ...options];
+}
+
 // --- שדות מימדי המפתחים ---
 function renderSpanDims(state) {
   const cls = STRUCTURE_CLASSES[state.structureClass];
@@ -326,22 +356,6 @@ function renderSpanDims(state) {
         data-action="span-dim-note" data-span="${span.id}" placeholder="זכרון ארגוני — לא משפיע על החישוב"></td></tr>`;
   }
   return html + "</table>";
-}
-
-// --- טאבים של מפתחים ---
-function renderSpanTabs(state, activeSpan) {
-  if (state.spanCount === 1)
-    return '<button class="tab active" data-action="span-tab" data-span="1">המבנה כולו</button>';
-  return state.spans.map((s) =>
-    `<button class="tab ${s.id === activeSpan ? "active" : ""}" data-action="span-tab" data-span="${s.id}">מפתח ${s.id}</button>`
-  ).join("");
-}
-
-// --- בורר מפתח היעד להוספת רכיב — נפרד מהטאבים, כדי שהשיוך יהיה גלוי
-// ומפורש בדיוק במקום שבו בוחרים את הרכיב מהקטלוג ---
-function renderAddCompSpanOptions(state, activeSpan) {
-  if (state.spanCount === 1) return '<option value="1">המבנה כולו</option>';
-  return state.spans.map((s) => `<option value="${s.id}" ${s.id === activeSpan ? "selected" : ""}>מפתח ${s.id}</option>`).join("");
 }
 
 // --- כל פגמי הפנקס בקומבו אחד — הקלדת קוד ("14.1") או שם מביאה את הפגם ---
@@ -413,24 +427,70 @@ function renderDefectForm(comp, draft) {
   </div>`;
 }
 
-// --- כרטיס רכיב ---
-function renderComponent(comp, ui, photoStore) {
+// --- טאבים של תת-הטאבים בלשונית "רכיבים" (אותו דפוס כמו ID_CARD_GROUPS) ---
+function renderCompTabs(activeCompTab) {
+  const tabs = [{ id: "summary", label: "סיכום רכיבים" }, { id: "detail", label: "פירוט הרכיבים" }];
+  return tabs.map((t) =>
+    `<button class="tab ${t.id === activeCompTab ? "active" : ""}" data-action="comp-tab" data-comptab="${t.id}">${esc(t.label)}</button>`
+  ).join("");
+}
+
+// --- תת-טאב 1 ("סיכום רכיבים"): שורה שטוחה לכל רכיב בכל המפתחים —
+// קטלוג (ניתן לשינוי) / כמות / מפתח / מחיקה. הוספת רכיב חדש: שורת "add-comp"
+// הקבועה בתחתית — בחירה בקומבו מוסיפה מיד למפתח שנבחר לצידה ---
+function renderComponentsSummary(state, ui) {
+  const rows = [];
+  state.spans.forEach((span) => {
+    span.components.forEach((c) => {
+      const spanOptions = state.spans.map((s) =>
+        `<option value="${s.id}" ${s.id === span.id ? "selected" : ""}>מפתח ${s.id}</option>`).join("");
+      rows.push(`<tr data-comp="${c.uid}">
+        <td>${Combobox.html({ id: `comp-type-${c.uid}`, action: "comp-change-type",
+          value: catalogValueForComponent(state, c) || "__current__",
+          options: componentComboOptionsForRow(state, c),
+          placeholder: "בחר רכיב מהקטלוג…" })}</td>
+        <td><input type="number" min="1" step="1" value="${c.subs.length}" data-action="comp-qty" style="width:70px"
+          title='לדוגמה: אם יש 3 קורות ראשיות במפתח, הכמות היא 3 — הטבלה בתת-הטאב הבא תתעדכן אוטומטית'></td>
+        <td><select data-action="comp-move-span">${spanOptions}</select></td>
+        <td><button class="btn btn-sm btn-danger" data-action="comp-remove">✕</button></td>
+      </tr>`);
+    });
+  });
+  const emptyMsg = rows.length ? "" : '<p class="empty-note">אין עדיין רכיבים — בחרו רכיב מהקטלוג למטה כדי להתחיל.</p>';
+  const defaultSpan = ui.addCompSpan || state.spans[0].id;
+  const spanOptionsNew = state.spans.map((s) =>
+    `<option value="${s.id}" ${s.id === defaultSpan ? "selected" : ""}>מפתח ${s.id}</option>`).join("");
+  return `${emptyMsg}
+    <table class="subs-table comp-summary-table">
+      <tr><th>רכיב (מהקטלוג)</th><th>כמות</th><th>מפתח</th><th></th></tr>
+      ${rows.join("")}
+    </table>
+    <div class="add-row">
+      <label class="add-comp-span-field">למפתח
+        <select id="add-comp-span" data-action="add-comp-span">${spanOptionsNew}</select>
+      </label>
+      <div id="add-comp-combo" class="combo-host">${Combobox.html({
+        id: "add-comp", action: "add-comp", options: componentComboOptions(state),
+        placeholder: "— בחר רכיב מהקטלוג להוספה (הקלד קוד או שם) —",
+      })}</div>
+    </div>
+    <p class="hint">קודם בוחרים למפתח מס' כמה, ואז בוחרים רכיב מהקטלוג — הוא נוסף מיד למפתח שנבחר.
+      אפשר להקליד בתיבת הקטלוג קוד (למשל "12") או שם.</p>`;
+}
+
+// --- כותרת חוזרת לרכיב בשתי הרשימות הפתוחות ("מפתח X — [קוד]. [שם]") ---
+function componentFlatHeading(span, comp) {
   const impLabel = comp.importance ? IMPORTANCE[comp.importance].label : "רכיב עזר";
   const badgeCls = comp.importance === "veryHigh" ? "badge-vh" : comp.importance ? "" : "badge-aux";
-  const defectRows = comp.defects.map((d) => {
-    const cat = DEFECT_CATALOG.defects.find((x) => x.code === d.def);
-    return `<tr>
-      <td>${esc(d.def || "—")}</td>
-      <td>${esc(cat ? cat.name_he : d.note === "רכיב תקין" ? "רכיב תקין" : "")}</td>
-      <td>${d.sub}</td><td>${d.s}</td><td>${esc(d.ex)}</td>
-      <td>${esc(d.note || "")}</td>
-      <td><input type="text" class="note-input" value="${esc(d.photo)}" data-action="defect-photo" data-defect="${d.uid}"
-        placeholder="קוד, אפשר כמה מופרדים ב-;" dir="ltr" style="width:110px"></td>
-      <td>${photoCodesCell(photoStore, d.photo)}</td>
-      <td><button class="btn btn-sm btn-danger" data-action="defect-remove" data-defect="${d.uid}">✕</button></td>
-    </tr>`;
-  }).join("");
+  return `<div class="comp-flat-heading">
+    <span class="comp-title">מפתח ${span.id} — ${esc(comp.catalogId != null ? comp.catalogId + ". " : "")}${esc(comp.name)}</span>
+    <span class="badge ${badgeCls}">${esc(impLabel)}</span>
+    <span class="badge badge-aux">${esc(comp.unit || "")}</span>
+  </div>`;
+}
 
+// --- טבלת מידה/מידה משנית לתת-רכיבים (ללא "כמות" — זה בתת-טאב "סיכום רכיבים") ---
+function renderSubsTable(comp) {
   const size2Col = !!comp.unit2;
   const subRows = comp.subs.map((s) => `
     <tr><td>תת-רכיב ${s.id}</td>
@@ -444,63 +504,82 @@ function renderComponent(comp, ui, photoStore) {
         ${comp.subs.length > 1 ? `<button class="btn btn-sm btn-danger" data-action="sub-remove" data-sub="${s.id}" title="מחיקת תת-הרכיב והפגמים שלו">✕</button>` : ""}
       </td>
     </tr>`).join("");
+  return `<div class="hint">מלאו את המידה (וה"מידה משנית" אם יש) לכל תת-רכיב — יחידה: ${esc(comp.unit || "")}${size2Col ? `, ${esc(comp.unit2)}` : ""}</div>
+    <table class="subs-table"><tr><th>תת-רכיב</th><th>מידה [${esc(comp.unit || "")}]</th>${size2Col ? `<th>מידה משנית ${esc(comp.unit2)}</th>` : ""}<th>הערה — איך חושבה המידה</th><th></th></tr>${subRows}</table>
+    <button class="btn btn-sm" data-action="sub-add">➕ תת-רכיב</button>`;
+}
 
+// --- תת-טאב 2 ("פירוט הרכיבים"): רשימה פתוחה — כותרת + טבלת מידה לכל רכיב ---
+function renderComponentsDetailList(state) {
+  const blocks = [];
+  state.spans.forEach((span) => {
+    span.components.forEach((comp) => {
+      blocks.push(`<div class="comp" data-comp="${comp.uid}">
+        ${componentFlatHeading(span, comp)}
+        ${renderSubsTable(comp)}
+      </div>`);
+    });
+  });
+  if (!blocks.length) return '<p class="empty-note">אין עדיין רכיבים — הוסיפו רכיבים בתת-הטאב "סיכום רכיבים".</p>';
+  return blocks.join("");
+}
+
+// --- לשונית "סקירת המבנה": טבלה אחת לכל מפתח, עם כל הרכיבים שלו יחד —
+// עמודת "רכיב" (rowspan על כל שורות הרכיב) מזהה כל קבוצה במקום כותרת נפרדת
+// לכל רכיב, כדי לצמצם גלילה. נסקר/רכיב תקין/מחיקה יושבים בתא ה-rowspan. ---
+function renderComponentSurveyRows(comp, ui, photoStore) {
+  const impLabel = comp.importance ? IMPORTANCE[comp.importance].label : "רכיב עזר";
+  const badgeCls = comp.importance === "veryHigh" ? "badge-vh" : comp.importance ? "" : "badge-aux";
+  const rowCls = comp.surveyed ? "" : "not-surveyed";
+  const defectRows = comp.defects.length ? comp.defects.map((d) => {
+    const cat = DEFECT_CATALOG.defects.find((x) => x.code === d.def);
+    const defectLabel = d.note === "רכיב תקין" ? "רכיב תקין"
+      : `${d.def ? esc(d.def) + " — " : ""}${esc(cat ? cat.name_he : "")}`;
+    return `<tr class="${rowCls}" data-comp="${comp.uid}">
+      <td>${defectLabel}</td>
+      <td>${d.sub}</td><td>${d.s}</td><td>${esc(d.ex)}</td>
+      <td>${esc(d.note || "")}</td>
+      <td><input type="text" class="note-input" value="${esc(d.photo)}" data-action="defect-photo" data-defect="${d.uid}"
+        placeholder="קוד, אפשר כמה מופרדים ב-;" dir="ltr" style="width:110px"></td>
+      <td>${photoCodesCell(photoStore, d.photo)}</td>
+      <td><button class="btn btn-sm btn-danger" data-action="defect-remove" data-defect="${d.uid}">✕</button></td>
+    </tr>`;
+  }) : [`<tr class="${rowCls}" data-comp="${comp.uid}"><td colspan="8" class="hint">אין רשומות פגם — יחושב כתקין (1A)</td></tr>`];
   const formOpen = ui.openDefectForm === comp.uid;
-  return `<div class="comp ${comp.surveyed ? "" : "not-surveyed"}" data-comp="${comp.uid}">
-    <div class="comp-head">
-      <span class="comp-title">${esc(comp.catalogId != null ? comp.catalogId + ". " : "")}${esc(comp.name)}</span>
+  const actionRow = `<tr class="${rowCls}" data-comp="${comp.uid}"><td colspan="8">
+    ${formOpen ? renderDefectForm(comp, ui.draft) : `<button class="btn btn-sm btn-primary" data-action="defect-open">➕ הוסף פגם</button>`}
+    ${!comp.surveyed ? '<p class="warn">רכיב מסומן "לא ניתן לסקירה" — לא ייכלל בחישוב הציון</p>' : ""}
+  </td></tr>`;
+  const allRows = [...defectRows, actionRow];
+  const nameCell = `<td rowspan="${allRows.length}" class="comp-name-cell ${rowCls}">
+    <div class="comp-name-cell-inner">
+      <span class="comp-title">${esc(comp.name)}</span>
       <span class="badge ${badgeCls}">${esc(impLabel)}</span>
-      <span class="badge badge-aux">${esc(comp.unit || "")}</span>
-      <label style="flex-direction:row;align-items:center;gap:4px;font-size:.8rem">
+      <label style="flex-direction:row;align-items:center;gap:4px;font-size:.78rem">
         <input type="checkbox" ${comp.surveyed ? "checked" : ""} data-action="comp-surveyed"> נסקר
       </label>
-      <button class="btn btn-sm" data-action="comp-intact" title="מסמן את הרכיב כתקין (1A)">✔️ רכיב תקין</button>
+      <button class="btn btn-sm" data-action="comp-intact" title="מסמן את הרכיב כתקין (1A)">✔️ תקין</button>
       <button class="btn btn-sm btn-danger" data-action="comp-remove">🗑</button>
     </div>
-    <div class="comp-body">
-      <div class="subs-block">
-        <label class="comp-qty-field">כמות רכיבים במפתח זה
-          <input type="number" min="1" step="1" value="${comp.subs.length}" data-action="comp-qty"
-            title='לדוגמה: אם יש 3 קורות ראשיות במפתח, הכמות היא 3 — הטבלה תתעדכן אוטומטית ל-3 שורות'>
-        </label>
-        <div class="hint">מלאו את המידה (וה"מידה משנית" אם יש) לכל רכיב בטבלה — יחידה: ${esc(comp.unit || "")}${size2Col ? `, ${esc(comp.unit2)}` : ""}</div>
-        <table class="subs-table"><tr><th>תת-רכיב</th><th>מידה [${esc(comp.unit || "")}]</th>${size2Col ? `<th>מידה משנית ${esc(comp.unit2)}</th>` : ""}<th>הערה — איך חושבה המידה</th><th></th></tr>${subRows}</table>
-        <button class="btn btn-sm" data-action="sub-add">➕ תת-רכיב</button>
-      </div>
-      ${comp.defects.length ? `<table class="defects-table">
-        <tr><th>קוד</th><th>פגם</th><th>תת-רכיב</th><th>S</th><th>Ex</th><th>הערות</th><th>קוד תמונה</th><th>סטטוס</th><th></th></tr>
-        ${defectRows}</table>` : '<p class="hint">אין רשומות פגם — רכיב ללא רשומות יחושב כתקין (1A) ויסומן בתקציר.</p>'}
-      ${formOpen ? renderDefectForm(comp, ui.draft) : `<button class="btn btn-sm btn-primary" data-action="defect-open">➕ הוסף פגם</button>`}
-      ${!comp.surveyed ? '<p class="warn">רכיב מסומן "לא ניתן לסקירה" — לא ייכלל בחישוב הציון</p>' : ""}
-    </div>
-  </div>`;
+  </td>`;
+  allRows[0] = allRows[0].replace(/^(<tr[^>]*>)/, `$1${nameCell}`);
+  return allRows.join("");
 }
 
-// --- רשימת-אב (משמאל): שורה תמציתית לכל רכיב, בחירה מציגה את הפירוט מימין ---
-function renderComponentMasterList(span, ui) {
-  if (!span || !span.components.length)
-    return '<div class="comp-master-empty">אין רכיבים במפתח זה עדיין — בחר רכיב מהקטלוג למעלה.</div>';
-  return span.components.map((c) => {
-    const impLabel = c.importance ? IMPORTANCE[c.importance].label : "עזר";
-    const badgeCls = c.importance === "veryHigh" ? "badge-vh" : c.importance ? "" : "badge-aux";
-    const active = c.uid === ui.activeComponent;
-    // <button> ולא <div> — מילוי רציף במקלדת הוא עקרון מוביל בכלי הזה,
-    // ורשימת הרכיבים חייבת להיות נגישה ב-Tab ולא רק בעכבר
-    return `<button type="button" class="comp-master-row ${active ? "active" : ""} ${c.surveyed ? "" : "not-surveyed"}"
-      data-action="comp-select" data-comp="${c.uid}" aria-pressed="${active}">
-      <span class="cm-name">${esc(c.catalogId != null ? c.catalogId + ". " : "")}${esc(c.name)}</span>
-      <span class="badge ${badgeCls}">${esc(impLabel)}</span>
-    </button>`;
-  }).join("");
-}
-
-// --- פאנל פירוט (מימין): הרכיב הנבחר בלבד ---
-function renderComponentDetail(span, ui, photoStore) {
-  // ההודעה על מפתח ריק מוצגת ברשימת-האב — כאן נשארים ריקים כדי לא לכפול אותה
-  if (!span || !span.components.length) return "";
-  const comp = span.components.find((c) => c.uid === ui.activeComponent);
-  if (!comp) return '<div class="comp-detail-empty">בחר רכיב מהרשימה משמאל כדי לערוך אותו.</div>';
-  return renderComponent(comp, ui, photoStore);
+// --- לשונית "סקירת המבנה": טבלה אחת למפתח, כותרת "מפתח X" בלבד ---
+function renderStructureSurvey(state, ui, photoStore) {
+  const blocks = [];
+  state.spans.forEach((span) => {
+    if (!span.components.length) return;
+    const rows = span.components.map((comp) => renderComponentSurveyRows(comp, ui, photoStore)).join("");
+    blocks.push(`<h3>מפתח ${span.id}</h3>
+      <table class="defects-table survey-table">
+        <tr><th>רכיב</th><th>פגם</th><th>תת-רכיב</th><th>S</th><th>Ex</th><th>הערות</th><th>קוד תמונה</th><th>סטטוס</th><th></th></tr>
+        ${rows}
+      </table>`);
+  });
+  if (!blocks.length) return '<p class="empty-note">אין עדיין רכיבים — הוסיפו רכיבים בלשונית "רכיבים".</p>';
+  return blocks.join("");
 }
 
 // --- תוצאות ---

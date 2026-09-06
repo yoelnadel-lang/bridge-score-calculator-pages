@@ -47,6 +47,7 @@
     <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="changes">שינויים</button>
     <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="findings">ממצאים</button>
     <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="components">רכיבים</button>
+    <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="survey">סקירת המבנה</button>
     <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="surveyor">סוקר</button>
     <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="engineer">מהנדס</button>
     <button class="sec-tab" role="tab" data-action="sec-tab" data-tab="drawings">תרשימים</button>
@@ -181,22 +182,23 @@
     </div>
   </details>
 
-  <!-- רכיבים ופגמים: master-detail -->
+  <!-- רכיבים: שני תת-טאבים — קודם מצהירים מה קיים ובאיזו כמות (סיכום),
+       ורק אחר כך ממלאים מידות (פירוט). פגמים עברו ללשונית "סקירת המבנה". -->
   <details class="panel no-print" id="sec-components" open>
-    <summary class="panel-head">רכיבים ופגמים</summary>
+    <summary class="panel-head">רכיבים</summary>
     <div class="panel-body">
-      <div id="span-tabs" class="tabs"></div>
-      <div class="add-row">
-        <label style="max-width:150px">הוספה למפתח
-          <select id="add-comp-span" data-action="add-comp-span"></select>
-        </label>
-        <div id="add-comp-combo" class="combo-host"></div>
-      </div>
-      <p class="hint">בחירת רכיב מהרשימה מוסיפה אותו מיד למפתח שנבחר משמאל, ובוחרת אותו — אפשר להקליד קוד (למשל "12") או שם.</p>
-      <div class="comp-split">
-        <div id="comp-master" class="comp-master"></div>
-        <div id="comp-detail" class="comp-detail"></div>
-      </div>
+      <div id="comp-tabs" class="tabs"></div>
+      <div id="comp-summary"></div>
+      <div id="comp-detail-list"></div>
+    </div>
+  </details>
+
+  <!-- סקירת המבנה: רשימה פתוחה של כל הרכיבים שהוצהרו — נסקר/רכיב תקין/פגמים -->
+  <details class="panel no-print" id="sec-survey" open>
+    <summary class="panel-head">סקירת המבנה</summary>
+    <div class="panel-body">
+      <p class="hint">כל רכיב חדש נחשב כברירת מחדל "תקין" (1A) לפי הנוהל — רישום פגם אמיתי מחליף את זה אוטומטית.</p>
+      <div id="structure-survey"></div>
     </div>
   </details>
 
@@ -360,12 +362,19 @@
       </table>
 
       <h3>6. רכיבים ופגמים — נקודות חשובות</h3>
+      <p>מילוי הרכיבים מתפצל לשלושה שלבים, בסגנון גיליון עבודה — קודם מצהירים מה קיים, אחר כך ממלאים מידות,
+        ולבסוף עוברים על הכול ורושמים פגמים:</p>
       <ul>
-        <li>בוחרים תחילה <strong>לאיזה מפתח</strong> מוסיפים (התיבה "הוספה למפתח" ליד הקטלוג).</li>
-        <li><strong>כמות רכיבים במפתח זה</strong> — אם יש 3 קורות ראשיות, מקלידים 3 והטבלה נפתחת ל-3 שורות מידה.</li>
-        <li>כל רכיב חדש מתחיל כ<strong>"רכיב תקין"</strong> (1A) לפי הנוהל. רישום פגם אמיתי מחליף את הרשומה הזו.</li>
-        <li>רכיב שקיים אך לא ניתן היה לסקור — מבטלים לו את הסימון <strong>"נסקר"</strong>. הוא לא ייכלל בחישוב,
-          ויופיע כרכיב שלא נסקר בתוצאות, בתקציר ובבקרה.</li>
+        <li><strong>לשונית "רכיבים" › תת-לשונית "סיכום רכיבים"</strong> — לכל רכיב: בוחרים אותו מהקטלוג
+          (קומבו עם חיפוש — אפשר להקליד קוד או שם), רושמים <strong>כמות</strong> (למשל 3 קורות ראשיות = מקלידים 3),
+          ובוחרים <strong>לאיזה מפתח</strong> הוא שייך. שינוי הכמות/המפתח/הסוג בשורה קיימת מתעדכן מיד.</li>
+        <li><strong>לשונית "רכיבים" › תת-לשונית "פירוט הרכיבים"</strong> — רשימה פתוחה של כל הרכיבים שהוצהרו
+          בשלב הקודם; לכל אחד ממלאים את המידה (וה"מידה משנית" אם יש) לכל תת-רכיב.</li>
+        <li><strong>לשונית "סקירת המבנה"</strong> — אותה רשימה, ולכל רכיב: תיבת "נסקר", כפתור "✔️ רכיב תקין",
+          וטבלת הפגמים. כל רכיב חדש מתחיל כ<strong>"רכיב תקין"</strong> (1A) לפי הנוהל — רישום פגם אמיתי מחליף
+          את הרשומה הזו אוטומטית.</li>
+        <li>רכיב שקיים אך לא ניתן היה לסקור — מבטלים לו את הסימון <strong>"נסקר"</strong> (בלשונית "סקירת המבנה").
+          הוא לא ייכלל בחישוב, ויופיע כרכיב שלא נסקר בתוצאות, בתקציר ובבקרה.</li>
       </ul>
 
       <h3>7. ייצוא הדוחות</h3>

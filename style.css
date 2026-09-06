@@ -118,36 +118,23 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 
 .add-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
 .add-row .combo-host { flex: 1; min-width: 240px; }
-
-/* --- master-detail לרכיבים, בסגנון "Bridge Elements" / "Spans & Conditions" --- */
-.comp-split { display: flex; flex-direction: row-reverse; gap: 12px; align-items: flex-start; }
-@media (max-width: 860px) { .comp-split { flex-direction: column; } }
-
-.comp-master {
-  flex: 0 0 300px; max-width: 300px; border: 1px solid var(--grid-border);
-  border-radius: 2px; overflow: hidden;
+/* "למפתח" בהוספת רכיב: קודם דבר שבוחרים, לכן מודגש וראשון בסדר (ימני ב-RTL) */
+.add-comp-span-field {
+  flex: 0 0 auto; min-width: 130px; font-weight: 700;
+  background: var(--primary-light); border-radius: 6px; padding: 4px 10px;
 }
-@media (max-width: 860px) { .comp-master { flex-basis: auto; max-width: none; } }
-.comp-master-row {
-  display: flex; align-items: center; gap: 6px; padding: 6px 10px;
-  font-size: .82rem; border: none; border-bottom: 1px solid var(--grid-border);
-  cursor: pointer; background: #fff; width: 100%; text-align: start;
-  font-family: inherit; color: inherit;
-}
-.comp-master-row:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
-.comp-master-row:last-child { border-bottom: none; }
-.comp-master-row:hover { background: var(--primary-light); }
-.comp-master-row.active { background: var(--select-bg); border-inline-start: 3px solid var(--select-border); }
-.comp-master-row.not-surveyed { opacity: .55; }
-.comp-master-row .cm-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.comp-master-empty { padding: 16px 10px; color: #57606a; font-size: .85rem; text-align: center; }
+.add-comp-span-field select { font-weight: 400; min-width: 110px; }
 
-.comp-detail {
-  flex: 1 1 auto; min-width: 0; border: 1px solid var(--grid-border);
-  border-radius: 2px; padding: 12px 14px;
+/* --- רשימה פתוחה לרכיבים ("פירוט הרכיבים" / "סקירת המבנה") — כרטיס לכל רכיב --- */
+.comp {
+  border: 1px solid var(--grid-border); border-radius: 6px;
+  padding: 10px 14px; margin-bottom: 12px;
 }
-.comp-detail:empty { display: none; }
-.comp-detail-empty { color: #57606a; font-size: .9rem; text-align: center; padding: 30px 10px; }
+.comp-flat-heading { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-bottom: 6px; }
+.comp-flat-heading .comp-title { font-weight: 700; flex: 1; min-width: 200px; }
+
+.comp-summary-table td { vertical-align: middle; }
+.comp-summary-table .combo { min-width: 260px; }
 
 /* קומבו עם סינון בהקלדה */
 .combo { position: relative; display: block; }
@@ -166,14 +153,12 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 6px 0 12px; margin-bottom: 8px; border-bottom: 1px solid var(--grid-border);
 }
-.comp-head .comp-title { font-weight: 700; flex: 1; min-width: 200px; }
 .badge {
   font-size: .72rem; border-radius: 10px; padding: 2px 9px; white-space: nowrap;
   background: #ddf4ff; color: #0550ae; border: 1px solid #b6e3ff;
 }
 .badge-aux { background: #f6f8fa; color: #57606a; border-color: var(--border); }
 .badge-vh { background: #ffebe9; color: #cf222e; border-color: #ffcecb; }
-.comp-body { padding: 0; }
 .comp.not-surveyed { opacity: .55; }
 
 .subs-table, .defects-table { width: 100%; border-collapse: collapse; font-size: .85rem; margin: 8px 0; }
@@ -200,9 +185,14 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 .surveyor-notes-table th:nth-child(3), .surveyor-notes-table td:nth-child(3) { width: 34px; }
 .surveyor-notes-table input[data-action="note-text"] { width: 100%; }
 .sub-actions { white-space: nowrap; }
-.subs-block { margin-bottom: 8px; }
-.comp-qty-field { max-width: 260px; margin-bottom: 6px; }
-.comp-qty-field input { width: 90px; }
+
+/* לשונית "סקירת המבנה": טבלה אחת למפתח — עמודת "רכיב" ב-rowspan מקבצת את
+   שורות הרכיב יחד במקום כרטיס/כותרת נפרדים, כדי לצמצם גלילה */
+.survey-table td[rowspan] { vertical-align: top; }
+.comp-name-cell { min-width: 170px; }
+.comp-name-cell-inner { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.comp-name-cell-inner .comp-title { font-weight: 700; }
+.survey-table tr.not-surveyed > td { opacity: .55; }
 
 .defect-form {
   border: 1px dashed var(--primary); border-radius: 8px; padding: 12px; margin-top: 10px;
