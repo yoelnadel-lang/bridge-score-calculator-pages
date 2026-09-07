@@ -49,16 +49,22 @@ const Combobox = (() => {
 
   // --- רשימה נפתחת ---
   // סינון עם דירוג: התאמות קידומת על הקוד (value) או על התווית קודמות להתאמות
-  // substring — כך הקלדת "14.1" מציגה את פגם 14.1 ראשון ולא את 1.14 וכד'.
+  // substring — כך הקלדת "14.01" מציגה את פגם 14.01 ראשון ולא את 01.14 וכד'.
+  // אפסים מובילים בקוד ("14.01") הם עניין של כתיב, לא של זיהוי — מי שמקליד
+  // "14.1" מתכוון לאותו פגם. משווים גם צורה מנוקת-אפסים של שני הצדדים, כך
+  // ש-"14.1" מוצא את 14.01 בלי ש-"01.14" ייתפס בטעות (הוא הופך ל-"1.14").
+  const stripZeros = (s) => s.replace(/\b0+(\d)/g, "$1");
   function rankedMatches(options, q) {
     if (!q) return options;
-    const prefix = [], substr = [];
+    const qz = stripZeros(q);
+    const prefix = [], substr = [], loose = [];
     for (const o of options) {
       const label = String(o.label), value = String(o.value);
       if (value.startsWith(q) || label.startsWith(q)) prefix.push(o);
       else if (label.includes(q) || value.includes(q)) substr.push(o);
+      else if (stripZeros(value).startsWith(qz)) loose.push(o);
     }
-    return prefix.concat(substr);
+    return prefix.concat(substr, loose);
   }
 
   function openList(combo, query) {

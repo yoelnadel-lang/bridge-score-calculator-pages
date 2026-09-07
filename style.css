@@ -287,7 +287,11 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
 .gov-table, .gov-kv { width: 100%; border-collapse: collapse; font-size: 10.5px; flex: 0 0 auto; }
 .gov-table th, .gov-table td, .gov-kv th, .gov-kv td { border: 1px solid #999; padding: 3px 6px; text-align: right; vertical-align: top; }
 .gov-table th { background: #f0f0f0; }
-.gov-kv th { background: #f0f0f0; width: 160px; font-weight: 700; }
+/* table-layout:fixed — בלעדיו כל שורה מקבלת רוחב עמודות משלה לפי אורך התוכן,
+   והטבלה נראית "מדורגת" במקום מיושרת בין ארבע העמודות */
+.gov-kv { table-layout: fixed; }
+.gov-kv th { background: #f0f0f0; width: 18%; font-weight: 700; }
+.gov-kv td { width: 32%; }
 .gov-empty { text-align: center; color: #666; }
 .gov-notes td:first-child { width: 40px; text-align: center; }
 .gov-summary-line { margin-top: 8px; font-size: 11px; flex: 0 0 auto; }

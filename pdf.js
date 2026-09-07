@@ -109,10 +109,11 @@ const PdfExport = (() => {
   // ============================================================================
   // מקטע 2: תיעוד ממצאים (תמונות תיעוד כלליות, לא קשורות לרכיב ספציפי)
   // ============================================================================
-  function buildFindingsPages(state, budgetInfo, scratch, photoStore) {
+  function buildFindingsPages(state, budgetInfo, scratch) {
     if (!state.findingPhotos.length) return [];
     const rows = state.findingPhotos.map((f, i) => `<tr>
-      <td>${i + 1}</td><td>${esc(f.desc || "")}</td><td>${photoCodesCell(photoStore, f.photo)}</td>
+      <td>${i + 1}</td><td>${esc(f.desc || "")}</td>
+      <td><span dir="ltr">${esc(parsePhotoCodes(f.photo).join("; "))}</span></td>
     </tr>`);
     const thead = `<thead><tr><th>מס"ד</th><th>תיאור הממצאים</th><th>שם התמונה</th></tr></thead>`;
     const { theadH, heights } = measureRowHeights(thead, rows, budgetInfo.contentW, scratch);
@@ -269,10 +270,16 @@ const PdfExport = (() => {
     const items = state.sketches
       .map((s) => ({ ...s, entry: photoStore.get((s.code || "").trim()) }))
       .filter((s) => s.entry);
-    return items.map((it) => `
-      ${govSectionTitle(7, "תרשימים")}
-      <div class="gov-sketch-caption">${esc(it.caption || it.code)}</div>
-      <div class="gov-sketch-wrap"><img src="${it.entry.dataUrl}" class="gov-sketch-img"></div>`);
+    // nativeImage: התרשים לא עובר דרך הרסטר של html2canvas אלא מוטמע ישירות
+    // ב-PDF (ר' buildReportPdf) — כך הוא נשמר ברזולוציה המקורית שלו במקום
+    // להיחתך לרזולוציית העמוד, ונדחס פעם אחת במקום פעמיים.
+    return items.map((it) => ({
+      nativeImage: true,
+      html: `
+        ${govSectionTitle(7, "תרשימים")}
+        <div class="gov-sketch-caption">${esc(it.caption || it.code)}</div>
+        <div class="gov-sketch-wrap"><img src="${it.entry.dataUrl}" class="gov-sketch-img"></div>`,
+    }));
   }
 
   // ============================================================================
@@ -327,6 +334,27 @@ const PdfExport = (() => {
     await Promise.all([...root.querySelectorAll("img")].map((img) => waitForImage(img)));
   }
 
+  // html2canvas מצייר כל <img> לתוך תיבת האלמנט ומתעלם מ-object-fit, ולכן
+  // תמונה שהתיבה שלה ביחס צדדים אחר יוצאת מתוחה ("מרוחה") בקובץ ה-PDF — גם
+  // כשעל המסך היא נראית תקין. הפתרון: אחרי שהפריסה חושבה, מודדים את התיבה
+  // שהוקצתה ומקבעים על התמונה עצמה רוחב/גובה ששומרים על היחס בתוכה, כך
+  // שהתיבה והתמונה זהות ואין מה למתוח. חייב לרוץ אחרי decodeImages —
+  // לפני שהתמונה נטענת אין naturalWidth.
+  function fitImages(root) {
+    for (const img of root.querySelectorAll("img")) {
+      const natW = img.naturalWidth, natH = img.naturalHeight;
+      if (!natW || !natH) continue;
+      const box = img.getBoundingClientRect();
+      if (!box.width || !box.height) continue;
+      const scale = Math.min(box.width / natW, box.height / natH);
+      img.style.width = Math.floor(natW * scale) + "px";
+      img.style.height = Math.floor(natH * scale) + "px";
+      img.style.objectFit = "fill";   // התיבה כבר ביחס הנכון — אין מה להתאים
+      img.style.flex = "0 0 auto";    // לא לתת ל-flex למתוח אותה בחזרה
+      img.style.margin = "auto";      // ממורכזת במקום שנותר בתא
+    }
+  }
+
   // בונה את מופע ה-jsPDF של "דוח סקירה" בלי לשמור אותו — קרוא גם מ-exportReport
   // (הורדה ישירה) וגם מ-exportZip (חבילת ZIP עם קובץ הטעינה)
   async function buildReportPdf(scratch, container) {
@@ -347,7 +375,7 @@ const PdfExport = (() => {
 
     const pageBodies = [
       ...buildGeneralDataPage(state, result),
-      ...buildFindingsPages(state, budgetInfo, scratch, photoStore),
+      ...buildFindingsPages(state, budgetInfo, scratch),
       ...buildComponentReviewPages(state, budgetInfo, scratch),
       ...buildQuantitySummaryPages(state, budgetInfo, scratch, result),
       ...buildSurveyorNotesPage(result),
@@ -359,14 +387,30 @@ const PdfExport = (() => {
     const total = pageBodies.length;
     const pdf = new jspdf.jsPDF("l", "mm", "a4");
     for (let i = 0; i < total; i++) {
+      const spec = pageBodies[i];
+      const isNative = typeof spec === "object" && spec.nativeImage;
       const pageEl = document.createElement("div");
       pageEl.className = "gov-page";
-      pageEl.innerHTML = govHeaderHTML(state, i + 1, total) + pageBodies[i];
+      pageEl.innerHTML = govHeaderHTML(state, i + 1, total) + (isNative ? spec.html : spec);
       container.appendChild(pageEl);
       await decodeImages(pageEl);
+      fitImages(pageEl);
+
+      // התרשים מוסתר מהרסטר (visibility שומר על הפריסה, ולכן על המלבן שחושב
+      // ב-fitImages) ומוטמע אחר כך ישירות ב-PDF באותו מלבן בדיוק
+      const native = isNative ? pageEl.querySelector("img.gov-sketch-img") : null;
+      let nativeRect = null;
+      if (native) {
+        const pr = pageEl.getBoundingClientRect(), ir = native.getBoundingClientRect();
+        const k = PAGE_W_MM / PAGE_W_PX;
+        nativeRect = [(ir.left - pr.left) * k, (ir.top - pr.top) * k, ir.width * k, ir.height * k];
+        native.style.visibility = "hidden";
+      }
+
       const canvas = await html2canvas(pageEl, { scale: SCALE, backgroundColor: "#ffffff" });
       if (i) pdf.addPage();
       pdf.addImage(canvas.toDataURL("image/jpeg", JPEG_QUALITY), "JPEG", 0, 0, PAGE_W_MM, PAGE_H_MM);
+      if (native) pdf.addImage(native.src, "JPEG", ...nativeRect);
       pageEl.remove();
     }
     return pdf;
@@ -388,9 +432,30 @@ const PdfExport = (() => {
     }
   }
 
+  // --- התמונות בתוך ה-ZIP: נשמרות כקבצים בינאריים ולא כ-base64 בתוך ה-JSON,
+  // כי base64 מנפח את הנתונים ב-33% והדחיסה לא מחזירה את זה (JPEG כבר דחוס).
+  // מניפסט קטן שומר את הקישור קוד⇄קובץ, כדי שטעינה חוזרת של ה-ZIP תשחזר את
+  // כל התמונות למקומן ולא רק את הטקסט ---
+  const ZIP_PHOTO_DIR = "תמונות";
+  const ZIP_MANIFEST = `${ZIP_PHOTO_DIR}/רשימת-תמונות.json`;
+  function addPhotosToZip(zip) {
+    const manifest = [];
+    let i = 0;
+    for (const [code, entry] of photoStore) {
+      const m = /^data:([^;]+);base64,(.*)$/.exec(entry.dataUrl || "");
+      if (!m) continue;
+      const ext = (entry.filename || "").split(".").pop() || "jpg";
+      const path = `${ZIP_PHOTO_DIR}/${String(++i).padStart(4, "0")}.${ext}`;
+      zip.file(path, m[2], { base64: true });
+      manifest.push({ code, path, mime: m[1], filename: entry.filename, kind: entry.kind });
+    }
+    if (manifest.length) zip.file(ZIP_MANIFEST, JSON.stringify(manifest, null, 2));
+    return manifest.length;
+  }
+
   // --- ייצוא חבילת ZIP: דוח הסקירה (PDF) + קובץ טעינה (JSON, כל מה שהוזן —
-  // בלי תמונות, כמו ה-state עצמו) — להעברה/שיתוף/גיבוי כקובץ אחד. קובץ
-  // הטעינה נטען בחזרה דרך "📂 טען מקובץ" בסרגל הכלים ---
+  // בלי תמונות, כמו ה-state עצמו) + תיקיית התמונות עצמן. טעינה חוזרת של
+  // ה-ZIP כולו משחזרת גם את התמונות; טעינת ה-JSON לבדו — רק את הטקסט ---
   async function exportZip() {
     if (!hasAnyComponents()) { alert("אין נתונים לייצוא — הוסף רכיבים תחילה."); return; }
     const scratch = makeScratch();
@@ -403,6 +468,7 @@ const PdfExport = (() => {
       const zip = new JSZip();
       zip.file(`דוח סקירה - ${baseName}.pdf`, pdf.output("blob"));
       zip.file(`קובץ טעינה - ${baseName}.json`, JSON.stringify(state, null, 2));
+      addPhotosToZip(zip);
       const zipBlob = await zip.generateAsync({ type: "blob" });
 
       const url = URL.createObjectURL(zipBlob);
@@ -432,6 +498,7 @@ const PdfExport = (() => {
     document.body.appendChild(el);
     try {
       await decodeImages(el);
+      fitImages(el);
       const canvas = await html2canvas(el, { scale: SCALE, backgroundColor: "#ffffff" });
       const pdf = new jspdf.jsPDF("p", "mm", "a4");
       const pageHc = PORTRAIT_H_PX * SCALE;
@@ -548,6 +615,7 @@ const PdfExport = (() => {
         pageEl.innerHTML = idCardHeaderHTML(i + 1, total) + pageBodies[i];
         container.appendChild(pageEl);
         await decodeImages(pageEl);
+        fitImages(pageEl);
         const canvas = await html2canvas(pageEl, { scale: SCALE, backgroundColor: "#ffffff" });
         if (i) pdf.addPage();
         pdf.addImage(canvas.toDataURL("image/jpeg", JPEG_QUALITY), "JPEG", 0, 0, PORTRAIT_W_MM, PORTRAIT_H_MM);

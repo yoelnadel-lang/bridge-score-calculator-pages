@@ -108,7 +108,13 @@ async function attachFolder(fileList) {
     const path = file.webkitRelativePath || "";
     const code = file.name.replace(/\.[^.]+$/, "").trim();
     const kind = path.includes("תמונות") ? "photo" : path.includes("סקיצות") ? "sketch" : (isSketchCode(code) ? "sketch" : "photo");
-    const dataUrl = await resizeImageFile(file, 1200, 0.8);
+    // תמונה מוצגת בדוח ברבע עמוד ולכן 1200px מספיקים לה; תרשים תופס עמוד שלם
+    // והוא קווים דקים וטקסט — הקטנה ל-1200px ואיכות 0.8 מטשטשות אותו. 3000px
+    // נותנים כ-300dpi ברוחב ההדפסה בפועל, והסקיצות מעטות כך שהמחיר בנפח זניח.
+    // resizeImageFile לעולם לא מגדיל, ולכן תרשים בעל רזולוציה נמוכה יותר נשמר כמו שהוא.
+    const dataUrl = kind === "sketch"
+      ? await resizeImageFile(file, 3000, 0.92)
+      : await resizeImageFile(file, 1200, 0.8);
     if (!dataUrl) continue;
     photoStore.set(code, { dataUrl, filename: file.name, kind });
     if (kind === "sketch") sketchCount++; else photoCount++;
@@ -171,7 +177,9 @@ function applyRecoveredState(newState) {
     closeQrScan();
     return;
   }
-  state = newState;
+  // דרך המיגרציה כמו כל מסלול טעינה אחר: קוד QR שהודפס בגרסה קודמת נושא את
+  // המבנה והקודים של אותה גרסה, וחייב לעבור את אותן התאמות
+  state = migrateState(newState);
   bumpUidCounterPast(state);
   // הסימון ✔ שייך לקובץ שנבחר בסשן הנוכחי — הנתונים המשוחזרים נושאים רק את
   // שם הקובץ, ולכן הסימון חייב להתאפס כדי לא להצהיר על קובץ שלא נבחר
@@ -181,22 +189,59 @@ function applyRecoveredState(newState) {
   update();
 }
 
-// --- טעינת סקירה מקובץ JSON (קובץ הטעינה שבתוך ה-ZIP, ר' pdf.js exportZip) ---
+// --- טעינת סקירה מקובץ: או ה-ZIP המלא (כולל התמונות) או קובץ הטעינה JSON
+// שבתוכו (טקסט בלבד). ר' pdf.js exportZip ---
 function loadStateFromFile(file) {
+  if (/\.zip$/i.test(file.name)) { loadStateFromZip(file); return; }
   const reader = new FileReader();
   reader.onload = () => {
     let parsed;
     try { parsed = JSON.parse(reader.result); }
     catch (e) { alert("הקובץ שנבחר אינו קובץ סקירה תקין (JSON פגום)."); return; }
     if (!confirm("לטעון את הסקירה מהקובץ? זה יחליף את הנתונים הנוכחיים בטופס (לא כולל תמונות מצורפות — יש לצרף אותן מחדש).")) return;
-    state = migrateState(parsed);
-    bumpUidCounterPast(state);
-    drawingsFileAttached = false;
-    ui.activeTab = "general"; ui.idCardTab = "general"; ui.compTab = "summary"; ui.openDefectForm = null;
-    update();
+    applyLoadedState(parsed);
   };
   reader.onerror = () => alert("לא ניתן לקרוא את הקובץ שנבחר.");
   reader.readAsText(file);
+}
+
+// טעינת חבילת ה-ZIP: משחזרת גם את הטקסט וגם את התמונות, כך שאפשר לתקן פרט
+// קטן בסקירה שכבר הופקה ולהפיק אותה מחדש בלי לצרף מחדש את התיקייה
+async function loadStateFromZip(file) {
+  let zip;
+  try { zip = await JSZip.loadAsync(file); }
+  catch (e) { alert("לא ניתן לקרוא את קובץ ה-ZIP שנבחר."); return; }
+
+  const manifestFile = zip.file(/רשימת-תמונות\.json$/)[0];
+  const stateFile = zip.file(/\.json$/i).find((f) => f !== manifestFile);
+  if (!stateFile) { alert("לא נמצא קובץ טעינה (JSON) בתוך ה-ZIP."); return; }
+
+  let parsed;
+  try { parsed = JSON.parse(await stateFile.async("string")); }
+  catch (e) { alert("קובץ הטעינה שבתוך ה-ZIP פגום."); return; }
+
+  const manifest = manifestFile ? JSON.parse(await manifestFile.async("string")) : [];
+  if (!confirm(`לטעון את הסקירה מה-ZIP? זה יחליף את הנתונים הנוכחיים בטופס (כולל ${manifest.length} תמונות).`)) return;
+
+  applyLoadedState(parsed);
+  photoStore.clear();
+  for (const item of manifest) {
+    const entry = zip.file(item.path);
+    if (!entry) continue;
+    const b64 = await entry.async("base64");
+    photoStore.set(item.code, {
+      dataUrl: `data:${item.mime};base64,${b64}`, filename: item.filename, kind: item.kind,
+    });
+  }
+  update();
+}
+
+function applyLoadedState(parsed) {
+  state = migrateState(parsed);
+  bumpUidCounterPast(state);
+  drawingsFileAttached = false;
+  ui.activeTab = "general"; ui.idCardTab = "general"; ui.compTab = "summary"; ui.openDefectForm = null;
+  update();
 }
 
 async function startQrScan() {
@@ -324,9 +369,18 @@ function migrateState(s) {
     dimNote: "", ...sp,
     components: (sp.components || []).map((c) => ({
       ...c, subs: (c.subs || []).map((su) => ({ note: "", size2: null, ...su })),
+      defects: (c.defects || []).map((d) => ({ ...d, def: normalizeDefectCode(d.def) })),
     })),
   }));
   return out;
+}
+
+// קוד פגם בפנקס נכתב בשני חלקים בני שתי ספרות — "14.01", לא "14.1" (כך גם
+// בדוח הרשמי של נתיבי ישראל). סקירות שנשמרו לפני התיקון נושאות את הצורה
+// הישנה, ובלעדיה הפגם לא היה נמצא בקטלוג ושמו היה נעלם מהטבלאות ומהדוח.
+function normalizeDefectCode(code) {
+  const m = String(code == null ? "" : code).match(/^(\d{1,2})\.(\d{1,2})$/);
+  return m ? `${m[1].padStart(2, "0")}.${m[2].padStart(2, "0")}` : code;
 }
 
 // --- ת.ז: עיגול ערכי מדידה לפי "מדריך לתיעוד" (5-2019) ---
@@ -519,9 +573,15 @@ function captureFocus() {
   } else if (el.id) {
     sel = "#" + CSS.escape(el.id);
   } else if (el.dataset && el.dataset.action) {
+    // כל data-* נוסף הוא מזהה השורה/השדה (finding, sketch, note, sub, code…).
+    // בלעדיו הסלקטור מתאים לכל השורות בטבלה, ו-querySelector מחזיר את הראשונה —
+    // ואז הפוקוס "קופץ" לשורה העליונה במקום להישאר במקומו.
     sel = `[data-action="${el.dataset.action}"]`;
-    if (el.dataset.sub) sel += `[data-sub="${el.dataset.sub}"]`;
-    if (el.dataset.span) sel += `[data-span="${el.dataset.span}"]`;
+    for (const [key, value] of Object.entries(el.dataset)) {
+      if (key === "action") continue;
+      const attr = key.replace(/[A-Z]/g, (ch) => "-" + ch.toLowerCase());
+      sel += `[data-${attr}="${String(value).replace(/["\\]/g, "\\$&")}"]`;
+    }
     if (el.type === "radio") sel += `[value="${el.value}"]`;
     const comp = el.closest("[data-comp]");
     if (comp) sel = `[data-comp="${comp.dataset.comp}"] ` + sel;
@@ -659,7 +719,7 @@ function loadExample() {
       };
       comp.defects = span.defects.filter((d) => d.comp === c.name).map((d) => ({
         uid: nextUid(), family: d.def ? +String(d.def).split(".")[0] : null,
-        def: d.def ? String(+String(d.def).split(".")[0]) + "." + String(+String(d.def).split(".")[1] || 0) : null,
+        def: d.def ? normalizeDefectCode(d.def) : null,
         sub: d.sub, s: d.s, ex: d.ex, note: "", photo: "",
       }));
       return comp;
@@ -885,6 +945,30 @@ function init() {
     }
     else if (action === "draft-save") saveDraft();
     else if (action === "draft-cancel") { ui.openDefectForm = null; ui.draft = null; scheduleUpdate(); }
+  });
+
+  // Enter בטבלאות שורה-אחר-שורה (ממצאים, סקיצות, הערות): ירידה לאותה עמודה
+  // בשורה הבאה, כמו בגיליון אלקטרוני — במקום להישאר במקום ולחכות ל-Tab שעובר
+  // דווקא לשדה הבא באותה שורה.
+  document.body.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
+    const el = e.target;
+    if (!el.matches || !el.matches("input, select")) return;
+    if (el.classList.contains("combo-input")) return;   // לקומבו יש טיפול Enter משלו
+    const cell = el.closest("td"), row = el.closest("tr");
+    if (!cell || !row || !row.parentElement) return;
+    const rows = [...row.parentElement.children];
+    const col = [...row.cells].indexOf(cell);
+    for (let i = rows.indexOf(row) + 1; i < rows.length; i++) {
+      const next = rows[i].cells[col] &&
+        rows[i].cells[col].querySelector('input:not([type="hidden"]), select, textarea');
+      if (next) {
+        e.preventDefault();
+        next.focus();
+        if (next.select) next.select();
+        return;
+      }
+    }
   });
 
   document.body.addEventListener("change", (e) => {

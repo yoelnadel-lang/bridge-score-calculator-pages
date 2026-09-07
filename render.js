@@ -381,7 +381,7 @@ function renderSpanDims(state) {
   return html + "</table>";
 }
 
-// --- כל פגמי הפנקס בקומבו אחד — הקלדת קוד ("14.1") או שם מביאה את הפגם ---
+// --- כל פגמי הפנקס בקומבו אחד — הקלדת קוד ("14.01") או שם מביאה את הפגם ---
 function allDefectComboOptions() {
   const famName = {};
   for (const f of DEFECT_CATALOG.families) famName[f.id] = `${f.id}. ${f.he}`;
@@ -418,9 +418,9 @@ function renderDefectForm(comp, draft) {
   return `<div class="defect-form" data-comp="${comp.uid}">
     <strong>הוספת פגם — לפי הפנקס לסוקר</strong>
     <div class="grid-2">
-      <label>הפגם — הקלד קוד (למשל 14.1) או שם
+      <label>הפגם — הקלד קוד (למשל 14.01) או שם
         ${Combobox.html({ id: "draft-def", action: "draft-def", value: draft.def,
-          options: allDefectComboOptions(), placeholder: 'הקלד קוד ("14.1") או שם פגם…' })}
+          options: allDefectComboOptions(), placeholder: 'הקלד קוד ("14.01") או שם פגם…' })}
         ${family ? `<span class="hint">משפחה: ${esc(family.id + ". " + family.he)}</span>` : ""}
       </label>
       <label>תת-רכיב
