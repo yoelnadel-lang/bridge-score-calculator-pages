@@ -124,6 +124,18 @@ function idCardAutoFields(groupId, state, result) {
   return [];
 }
 
+// הנחיית המדידה שמוצגת מתחת לשדה — נגזרת מהמטא-דאטה עצמה, כדי שהכלל שמופיע
+// למשתמש והכלל שהקוד אוכף יהיו תמיד אותו דבר
+function measureHint(f) {
+  if (f.hint) return f.hint;
+  const parts = [];
+  if (f.unit) parts.push(f.unit);
+  if (f.step) parts.push(f.step >= 1 ? "מספר שלם" : `דיוק ${Math.round(f.step * 100)} ס"מ`);
+  if (f.round === "up") parts.push("עיגול כלפי מעלה");
+  else if (f.round === "down") parts.push("עיגול כלפי מטה");
+  return parts.join(" · ");
+}
+
 function renderIdCardGroup(groupId, state, result, photoStore) {
   const group = ID_CARD_GROUPS.find((g) => g.id === groupId) || ID_CARD_GROUPS[0];
   const auto = idCardAutoFields(groupId, state, result).map(({ code, label, value }) => `
@@ -141,11 +153,22 @@ function renderIdCardGroup(groupId, state, result, photoStore) {
         <span class="hint">${photoCodesCell(photoStore, state.idCard[f.code]) || "לא נרשם קוד"}</span>
       </label>`;
     }
+    const val = state.idCard[f.code] || "";
+    // שדה מדידה/מנייה (step מוגדר ב-ID_CARD_GROUPS): קלט מספרי בלבד, ברזולוציה
+    // שהמדריך לתיעוד מחייב — כדי שהנתון יישאר בר-השוואה בין סקירות ובר-שאילתה.
+    if (f.step) {
+      return `<label>${esc(f.code)} ${esc(f.label)}
+        <input type="number" min="0" step="${f.step}" ${f.max ? `max="${f.max}"` : ""}
+          inputmode="decimal" value="${esc(val)}"
+          data-action="idcard-field" data-code="${esc(f.code)}">
+        <span class="hint">${esc(measureHint(f))}</span>
+      </label>`;
+    }
     // f.placeholder: סעיפים שהנוהל מייעד למילוי על ידי גורם אחר (למשל מנהל
     // תחום סקירת גשרים) ולא הסוקר — התיבה נשארת ניתנת לעריכה, רק עם הנחיה
     // בתוכה כשהיא ריקה, ולא מוצג ריק ("—") אם היא לא מולאה בדוח המודפס.
     return `<label>${esc(f.code)} ${esc(f.label)}
-      <input type="${f.type === "date" ? "date" : "text"}" value="${esc(state.idCard[f.code] || "")}"
+      <input type="${f.type === "date" ? "date" : "text"}" value="${esc(val)}"
         ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ""}
         data-action="idcard-field" data-code="${esc(f.code)}">
     </label>`;

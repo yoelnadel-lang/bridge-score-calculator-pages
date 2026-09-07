@@ -319,12 +319,55 @@ function migrateState(s) {
     const parts = s.coordinates.trim().split(/\s+/);
     out.coordX = parts[0] || ""; out.coordY = parts[1] || "";
   }
+  out.idCard = normalizeIdCardValues(out.idCard);
   out.spans = (out.spans || []).map((sp) => ({
     dimNote: "", ...sp,
     components: (sp.components || []).map((c) => ({
       ...c, subs: (c.subs || []).map((su) => ({ note: "", size2: null, ...su })),
     })),
   }));
+  return out;
+}
+
+// --- ת.ז: עיגול ערכי מדידה לפי "מדריך לתיעוד" (5-2019) ---
+// כל סעיף מדידה בת.ז מוגדר ברזולוציה ובכיוון עיגול משלו (ר' ID_CARD_GROUPS).
+// העיגול נעשה בעת יציאה מהשדה, כדי שכל הסוקרים ידווחו באותו דיוק והנתון יישאר
+// מספרי ובר-השוואה בין סקירות של אותו מבנה.
+function idCardFieldDef(code) {
+  for (const g of ID_CARD_GROUPS) {
+    const f = g.fields.find((x) => x.code === code);
+    if (f) return f;
+  }
+  return null;
+}
+function roundToStep(value, step, dir) {
+  // epsilon: 6.45/0.05 מחזיר 128.99999999999997 בחשבון צף, ובלי סבילות ערך
+  // שכבר עומד ברזולוציה היה "מתעגל" כלפי מטה בטעות
+  const eps = 1e-9;
+  const n = value / step;
+  const k = dir === "up" ? Math.ceil(n - eps) : dir === "down" ? Math.floor(n + eps) : Math.round(n);
+  return +(k * step).toFixed(4);
+}
+function normalizeIdCardValue(code, raw) {
+  const f = idCardFieldDef(code);
+  if (!f || !f.step) return raw;
+  // מפרידי אלפים ורווחים הם עניין של הקלדה, לא של הנתון ("98,000" ⇒ 98000)
+  const s = String(raw).replace(/[,\s]/g, "");
+  if (s === "") return "";
+  if (!isFinite(s)) return "";        // טקסט חופשי אינו ערך חוקי בשדה מספרי
+  return f.round ? String(roundToStep(parseFloat(s), f.step, f.round)) : s;
+}
+
+// מעבר על ת.ז שמורה: שדות שהוגדרו מספריים מנוקים מטקסט חופשי שנשמר בגרסאות
+// קודמות ומעוגלים לרזולוציה הנדרשת, כדי שהמצב השמור יהיה עקבי עם מה שהטופס
+// מאפשר להזין מעכשיו
+function normalizeIdCardValues(idCard) {
+  const out = { ...(idCard || {}) };
+  for (const code of Object.keys(out)) {
+    const normalized = normalizeIdCardValue(code, out[code]);
+    if (normalized === "") delete out[code];
+    else out[code] = normalized;
+  }
   return out;
 }
 
@@ -874,7 +917,10 @@ function init() {
       const n = state[el.dataset.list].find((x) => x.uid === el.dataset.note);
       if (n) { n.text = el.value; scheduleUpdate(); }
     }
-    else if (action === "idcard-field") { state.idCard[el.dataset.code] = el.value; scheduleUpdate(); }
+    else if (action === "idcard-field") {
+      state.idCard[el.dataset.code] = normalizeIdCardValue(el.dataset.code, el.value);
+      scheduleUpdate();
+    }
     else if (action === "idcard-photo") { state.idCardMainPhoto = el.value; scheduleUpdate(); }
     else if (action === "prev-insp-date") { state.prevInspDate = el.value; scheduleUpdate(); }
     else if (action === "span-dim") {
