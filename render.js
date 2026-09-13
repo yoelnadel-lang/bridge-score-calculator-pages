@@ -589,20 +589,47 @@ function renderComponentSurveyRows(comp, ui, photoStore) {
   return allRows.join("");
 }
 
-// --- לשונית "סקירת המבנה": טבלה אחת למפתח, כותרת "מפתח X" בלבד ---
-function renderStructureSurvey(state, ui, photoStore) {
+// --- לשונית "סקירת המבנה": master-detail — רשימת כל הרכיבים (לפי מפתח)
+// מימין, ומימין לה טבלת הפגמים של הרכיב הנבחר בלבד (ui.surveyComponent) —
+// כדי שלא יהיה צורך לגלול/לראות את כל פגמי הגשר כדי לעבוד על רכיב אחד ---
+function renderSurveyMasterList(state, ui) {
   const blocks = [];
   state.spans.forEach((span) => {
     if (!span.components.length) return;
-    const rows = span.components.map((comp) => renderComponentSurveyRows(comp, ui, photoStore)).join("");
-    blocks.push(`<h3>מפתח ${span.id}</h3>
-      <table class="defects-table survey-table">
-        <tr><th>רכיב</th><th>פגם</th><th>תת-רכיב</th><th>S</th><th>Ex</th><th>הערות</th><th>קוד תמונה</th><th>סטטוס</th><th></th></tr>
-        ${rows}
-      </table>`);
+    blocks.push(`<div class="survey-master-group">מפתח ${span.id}</div>`);
+    span.components.forEach((c) => {
+      const impLabel = c.importance ? IMPORTANCE[c.importance].label : "עזר";
+      const badgeCls = c.importance === "veryHigh" ? "badge-vh" : c.importance ? "" : "badge-aux";
+      const active = c.uid === ui.surveyComponent;
+      // <button> ולא <div> — מילוי/ניווט רציף במקלדת הוא עקרון מוביל בכלי הזה
+      blocks.push(`<button type="button" class="survey-master-row ${active ? "active" : ""} ${c.surveyed ? "" : "not-surveyed"}"
+        data-action="survey-select" data-comp="${c.uid}" aria-pressed="${active}">
+        <span class="cm-name">${esc(c.catalogId != null ? c.catalogId + ". " : "")}${esc(c.name)}</span>
+        <span class="badge ${badgeCls}">${esc(impLabel)}</span>
+      </button>`);
+    });
   });
-  if (!blocks.length) return '<p class="empty-note">אין עדיין רכיבים — הוסיפו רכיבים בלשונית "רכיבים".</p>';
-  return blocks.join("");
+  return blocks.join("") || '<div class="survey-master-empty">אין רכיבים.</div>';
+}
+function renderSurveyDetail(state, ui, photoStore) {
+  let comp = null;
+  for (const span of state.spans) {
+    comp = span.components.find((c) => c.uid === ui.surveyComponent);
+    if (comp) break;
+  }
+  if (!comp) return '<div class="survey-detail-empty">בחר רכיב מהרשימה מימין כדי לרשום לו פגמים.</div>';
+  return `<table class="defects-table survey-table">
+    <tr><th>רכיב</th><th>פגם</th><th>תת-רכיב</th><th>S</th><th>Ex</th><th>הערות</th><th>קוד תמונה</th><th>סטטוס</th><th></th></tr>
+    ${renderComponentSurveyRows(comp, ui, photoStore)}
+  </table>`;
+}
+function renderStructureSurvey(state, ui, photoStore) {
+  if (!state.spans.some((s) => s.components.length))
+    return '<p class="empty-note">אין עדיין רכיבים — הוסיפו רכיבים בלשונית "רכיבים".</p>';
+  return `<div class="survey-split">
+    <div class="survey-master">${renderSurveyMasterList(state, ui)}</div>
+    <div class="survey-detail">${renderSurveyDetail(state, ui, photoStore)}</div>
+  </div>`;
 }
 
 // --- תוצאות ---

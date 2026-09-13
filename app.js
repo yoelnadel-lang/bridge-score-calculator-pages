@@ -29,7 +29,7 @@ const NOTE_CONTAINERS = {
   changeNotes: "change-notes", surveyorNotes: "surveyor-notes",
   engineerNotes: "engineer-notes", communicationNotes: "communication-notes",
 };
-const ui = { activeTab: "general", openDefectForm: null, draft: null, idCardTab: "general", compTab: "summary", addCompSpan: null };
+const ui = { activeTab: "general", openDefectForm: null, draft: null, idCardTab: "general", compTab: "summary", addCompSpan: null, surveyComponent: null };
 
 // --- מאגר קבצים מצורפים (תמונות/סקיצות) — session בלבד, לא נשמר ב-localStorage:
 // תמונות שוקלות מגה-בייטים והמכסה כ-5MB. מצורפות מחדש בכל טעינה, ממש לפני
@@ -440,6 +440,12 @@ function syncSpanCount() {
   while (state.spans.length < n) state.spans.push({ id: state.spans.length + 1, dim: "", dimNote: "", components: [] });
   while (state.spans.length > n) state.spans.pop();
 }
+// מוודא ש-ui.surveyComponent (הרכיב הנבחר ב"סקירת המבנה") מצביע על רכיב קיים
+// — נקרא בכל update(), כדי שמחיקת הרכיב הנבחר תעביר אוטומטית לרכיב הבא הקיים
+function syncSurveyComponent() {
+  const all = state.spans.flatMap((s) => s.components);
+  if (!all.some((c) => c.uid === ui.surveyComponent)) ui.surveyComponent = all[0] ? all[0].uid : null;
+}
 
 // --- פענוח פרטי רכיב מהקטלוג, כולל רזולוציית ראשי/משני דינמית לפי טבלה 2/6 —
 // משותף להוספת רכיב חדש ולשינוי סוג של רכיב קיים (comp-change-type) ---
@@ -605,6 +611,7 @@ function restoreFocus(f) {
 function update() {
   const focused = captureFocus();
   syncSpanCount();
+  syncSurveyComponent();
 
   document.getElementById("breadcrumb").innerHTML = renderBreadcrumb(state);
   document.querySelectorAll("#sec-tabs .sec-tab").forEach((btn) => {
@@ -837,6 +844,7 @@ function init() {
     if (action === "sec-tab") { ui.activeTab = el.dataset.tab; scheduleUpdate(); }
     else if (action === "comp-tab") { ui.compTab = el.dataset.comptab; scheduleUpdate(); }
     else if (action === "idcard-tab") { ui.idCardTab = el.dataset.group; scheduleUpdate(); }
+    else if (action === "survey-select") { ui.surveyComponent = compUid; ui.openDefectForm = null; scheduleUpdate(); }
     else if (action === "finding-add") {
       // לחיצה אחת גם שומרת את מה שהוקלד וגם פותחת שורה חדשה עם פוקוס מיידי
       flushRowInputs("finding-photos", state.findingPhotos, "finding",

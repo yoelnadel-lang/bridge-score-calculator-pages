@@ -125,7 +125,7 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 }
 .add-comp-span-field select { font-weight: 400; min-width: 110px; }
 
-/* --- רשימה פתוחה לרכיבים ("פירוט הרכיבים" / "סקירת המבנה") — כרטיס לכל רכיב --- */
+/* --- רשימה פתוחה לרכיבים ("פירוט הרכיבים") — כרטיס לכל רכיב --- */
 .comp {
   border: 1px solid var(--grid-border); border-radius: 6px;
   padding: 10px 14px; margin-bottom: 12px;
@@ -135,6 +135,38 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 
 .comp-summary-table td { vertical-align: middle; }
 .comp-summary-table .combo { min-width: 260px; }
+
+/* --- "סקירת המבנה": master-detail — רשימת כל הרכיבים מימין, טבלת הפגמים
+   של הרכיב הנבחר בלבד משמאלה. אותו דפוס שהיה קיים ללשונית "רכיבים" עצמה
+   לפני שפוצלה לרשימה פתוחה, כאן נשאר כי בעבודת פגמים רוצים רכיב אחד בכל
+   פעם ולא את כל הגשר גלוי בבת אחת --- */
+.survey-split { display: flex; flex-direction: row-reverse; gap: 12px; align-items: flex-start; }
+@media (max-width: 860px) { .survey-split { flex-direction: column; } }
+
+.survey-master {
+  flex: 0 0 300px; max-width: 300px; max-height: 640px; overflow-y: auto;
+  border: 1px solid var(--grid-border); border-radius: 2px;
+}
+@media (max-width: 860px) { .survey-master { flex-basis: auto; max-width: none; max-height: 320px; } }
+.survey-master-group {
+  padding: 6px 10px; font-weight: 700; font-size: .8rem;
+  background: var(--panel-header-bg); border-bottom: 1px solid var(--grid-border);
+}
+.survey-master-row {
+  display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+  font-size: .82rem; border: none; border-bottom: 1px solid var(--grid-border);
+  cursor: pointer; background: #fff; width: 100%; text-align: start;
+  font-family: inherit; color: inherit;
+}
+.survey-master-row:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.survey-master-row:hover { background: var(--primary-light); }
+.survey-master-row.active { background: var(--select-bg); border-inline-start: 3px solid var(--select-border); }
+.survey-master-row.not-surveyed { opacity: .55; }
+.survey-master-row .cm-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.survey-master-empty { padding: 16px 10px; color: #57606a; font-size: .85rem; text-align: center; }
+
+.survey-detail { flex: 1 1 auto; min-width: 0; }
+.survey-detail-empty { color: #57606a; font-size: .9rem; text-align: center; padding: 30px 10px; border: 1px solid var(--grid-border); border-radius: 2px; }
 
 /* קומבו עם סינון בהקלדה */
 .combo { position: relative; display: block; }
@@ -271,30 +303,46 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
 /* דוח סקירה PDF — פורמט רשמי, A4 לרוחב, עמוד = div נפרד (לא קנבס ארוך שנחתך),
    כך שכותרת המבנה ומספור העמוד חוזרים אמיתית על כל עמוד. */
 #gov-report { position: absolute; top: 0; left: -20000px; }
+/* עיצוב מותאם ל"Bridge Inspections.pdf" (הדוח הרשמי של נתיבי ישראל) —
+   Arial בלבד, גופן בסיס 10pt (=13.3px ב-96dpi), גבולות שחר דקים, ובלי
+   הדגשה/רקע אפור על תוויות שבמסמך המקור מוצגות כטקסט רגיל לבן */
 .gov-page {
   width: 1122px; height: 794px; background: #fff; overflow: hidden;
   padding: 14px; box-sizing: border-box; direction: rtl;
-  font-family: "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif; color: var(--text);
-  font-size: 11px; display: flex; flex-direction: column;
+  font-family: Arial, "Segoe UI", "Noto Sans Hebrew", sans-serif; color: #000;
+  font-size: 13.3px; display: flex; flex-direction: column;
 }
-.gov-head { width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 10px; flex: 0 0 auto; }
-.gov-head td { border: 1px solid #999; padding: 3px 6px; }
-.gov-head-label { background: #f0f0f0; font-weight: 700; white-space: nowrap; width: 90px; }
-.gov-head-pageno { white-space: nowrap; text-align: left; font-weight: 700; }
+/* "דו"ח סקירה" — כותרת עליונה שמופיעה רק בעמוד הראשון, מעל הטבלה החוזרת */
+.gov-report-title { font-weight: 700; text-align: center; margin-bottom: 4px; flex: 0 0 auto; }
 
-.gov-section-title { background: #d9d9d9; font-weight: 700; padding: 4px 8px; margin-bottom: 4px; flex: 0 0 auto; }
+.gov-head { width: 100%; border-collapse: collapse; margin-bottom: 6px; flex: 0 0 auto; }
+.gov-head td { border: 1px solid #000; padding: 3px 6px; }
+.gov-head-label { white-space: nowrap; width: 90px; }
+.gov-head-pageno { white-space: nowrap; text-align: left; }
 
-.gov-table, .gov-kv { width: 100%; border-collapse: collapse; font-size: 10.5px; flex: 0 0 auto; }
-.gov-table th, .gov-table td, .gov-kv th, .gov-kv td { border: 1px solid #999; padding: 3px 6px; text-align: right; vertical-align: top; }
-.gov-table th { background: #f0f0f0; }
-/* table-layout:fixed — בלעדיו כל שורה מקבלת רוחב עמודות משלה לפי אורך התוכן,
-   והטבלה נראית "מדורגת" במקום מיושרת בין ארבע העמודות */
-.gov-kv { table-layout: fixed; }
-.gov-kv th { background: #f0f0f0; width: 18%; font-weight: 700; }
-.gov-kv td { width: 32%; }
+.gov-section-title { background: #ccc; font-weight: 700; padding: 4px 8px; margin-bottom: 4px; flex: 0 0 auto; }
+
+.gov-table, .gov-kv { width: 100%; border-collapse: collapse; flex: 0 0 auto; }
+.gov-table th, .gov-table td, .gov-kv th, .gov-kv td { border: 1px solid #000; padding: 3px 6px; text-align: right; vertical-align: top; }
+.gov-table th { font-weight: 700; }
+/* שורה אחת לכל שדה (כמו במקור) — עמודת התווית ברוחב קבוע, הערך תופס את השאר */
+.gov-kv th { font-weight: 400; width: 230px; white-space: nowrap; }
+.gov-kv-cpi { font-weight: 700; }
+/* flex:0 0 auto + align-items:flex-start — קריטי: בלעדיהם המעטפת יורשת
+   flex:1 1 auto מהעמוד (טור אנכי) ונמתחת לכל הגובה הפנוי, ואיתה כל שורות
+   ה-kv נמתחות איתה (כל שורה גדלה כדי למלא את השטח) — בדיוק זה מה שקרה כאן
+   וגרם לשורות ענקיות במקום השורות הצפופות שבמקור */
+.gov-general-wrap { display: flex; gap: 8px; align-items: flex-start; flex: 0 0 auto; }
+.gov-general-wrap .gov-kv { flex: 1 1 auto; }
+.gov-general-photo {
+  flex: 0 0 260px; height: 320px; border: 1px solid #000; display: flex;
+  align-items: center; justify-content: center; overflow: hidden;
+}
+.gov-general-photo img { width: 100%; height: 100%; object-fit: contain; }
+.gov-legend { font-size: 10.7px; margin-top: 4px; flex: 0 0 auto; }
 .gov-empty { text-align: center; color: #666; }
 .gov-notes td:first-child { width: 40px; text-align: center; }
-.gov-summary-line { margin-top: 8px; font-size: 11px; flex: 0 0 auto; }
+.gov-summary-line { margin-top: 8px; flex: 0 0 auto; }
 
 /* ת.ז PDF — A4 לאורך, אותו מנגנון עמוד-לעמוד ואותן מחלקות טבלה (gov-table
    וכו') כמו "דוח סקירה", רק כותרת פשוטה יותר (בלי טבלת שם-מבנה/סוקר). */

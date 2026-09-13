@@ -31,8 +31,10 @@ const PdfExport = (() => {
   }
 
   // --- כותרת חוזרת בראש כל עמוד (שם/מספר מבנה, סוקר, חברה, דף N מתוך M) ---
+  // "דו"ח סקירה" מופיע רק בעמוד הראשון, מעל הטבלה החוזרת — כך גם במקור
   function govHeaderHTML(state, pageNum, totalPages) {
-    return `<table class="gov-head">
+    const title = pageNum === 1 ? `<div class="gov-report-title">דו"ח סקירה</div>` : "";
+    return `${title}<table class="gov-head">
       <tr>
         <td class="gov-head-label">שם המבנה:</td><td>${esc(state.name || "—")}</td>
         <td class="gov-head-label">מספר המבנה:</td><td dir="ltr">${esc(state.number || "—")}</td>
@@ -44,8 +46,12 @@ const PdfExport = (() => {
       </tr>
     </table>`;
   }
+  // סעיף 1 ("נתונים כלליים") מוצג במקור בלי מספר סוגריים, עם נקודתיים בסוף;
+  // שאר הסעיפים מוצגים "[n] כותרת" — כך גם ב-Bridge Inspections.pdf
   function govSectionTitle(n, title) {
-    return `<div class="gov-section-title">[${n}] ${esc(title)}</div>`;
+    return n === 1
+      ? `<div class="gov-section-title">${esc(title)}:</div>`
+      : `<div class="gov-section-title">[${n}] ${esc(title)}</div>`;
   }
 
   // --- מדידת גובה שורות אמיתי (רינדור בפועל, לא הערכה) לפיצול טבלה ארוכה
@@ -76,21 +82,43 @@ const PdfExport = (() => {
   // ============================================================================
   // מקטע 1: נתונים כלליים (עמוד אחד קבוע)
   // ============================================================================
-  function buildGeneralDataPage(state, result) {
+  function buildGeneralDataPage(state, result, photoStore) {
     const insp = computeNextInspection(state);
     const fmtDate = (d) => (d ? d.toLocaleDateString("he-IL") : "—");
+    // שורה אחת לכל שדה, כמו בעמוד המקביל ב-Bridge Inspections.pdf (לא שני
+    // שדות זה-לצד-זה) — קודי הסעיפים שכבר קיימים ב-ID_CARD_GROUPS חוזרים כאן
+    // לעקביות עם לשונית ת.ז
     const rows = [
-      ["מספר המבנה", `<span dir="ltr">${esc(state.number || "—")}</span>`, "שם המבנה", esc(state.name || "—")],
-      ["שם המזמין", esc(state.client || "—"), "מתכנן המבנה", esc(state.designer || "—")],
-      ["כביש מס'", `<span dir="ltr">${esc(state.roadNumber || "—")}</span>`, "קואורדינטה X", `<span dir="ltr">${esc(state.coordX || "—")}</span>`],
-      ["קואורדינטה Y", `<span dir="ltr">${esc(state.coordY || "—")}</span>`, "סוג הסקירה", esc(state.surveyType || "—")],
-      ["סיווג ראשי", esc(STRUCTURE_CLASSES[state.structureClass].label), "מספר מפתחים / יחידות", String(state.spanCount)],
-      ["שם הסוקר", esc(state.surveyorName || "—"), "שם החברה", esc(state.companyName || "—")],
-      ["תאריך הסקירה הנוכחית", esc(state.inspDate || "—"), "תאריך הסקירה הבאה (מומלץ)", insp ? fmtDate(insp.effective) : "—"],
-      ["CPI Average", fmt(result.bridge.method_norm.cpiAv), "CPI Critical", fmt(result.bridge.cpiCrit)],
+      ["01.01", "מספר המבנה", `<span dir="ltr">${esc(state.number || "—")}</span>`],
+      ["01.02", "שם המבנה", esc(state.name || "—")],
+      [null, "שם המזמין", esc(state.client || "—")],
+      [null, "מתכנן המבנה", esc(state.designer || "—")],
+      ["01.06", "כביש מס'", `<span dir="ltr">${esc(state.roadNumber || "—")}</span>`],
+      ["01.11", "קואורדינטה X", `<span dir="ltr">${esc(state.coordX || "—")}</span>`],
+      ["01.10", "קואורדינטה Y", `<span dir="ltr">${esc(state.coordY || "—")}</span>`],
+      [null, "סוג הסקירה", esc(state.surveyType || "—")],
+      ["02.01", "סיווג ראשי", esc(STRUCTURE_CLASSES[state.structureClass].label)],
+      ["04.01", "מספר מפתחים / יחידות", String(state.spanCount)],
+      [null, "שם הסוקר", esc(state.surveyorName || "—")],
+      [null, "שם החברה", esc(state.companyName || "—")],
+      [null, "תאריך הסקירה הנוכחית", esc(state.inspDate || "—")],
+      [null, "תאריך הסקירה הבאה (מומלץ)", insp ? fmtDate(insp.effective) : "—"],
+      [null, "CPI Average", `<span class="gov-kv-cpi">${fmt(result.bridge.method_norm.cpiAv)}</span>`],
+      [null, "CPI Critical", `<span class="gov-kv-cpi">${fmt(result.bridge.cpiCrit)}</span>`],
     ];
-    const trs = rows.map(([l1, v1, l2, v2]) => `<tr><th>${l1}</th><td>${v1}</td><th>${l2}</th><td>${v2}</td></tr>`).join("");
-    return [`${govSectionTitle(1, "נתונים כלליים")}<table class="gov-kv">${trs}</table>${immediateAttentionBlock(state)}`];
+    const trs = rows.map(([code, label, val]) =>
+      `<tr><th>${code ? esc(code) + " " : ""}${esc(label)}</th><td>${val}</td></tr>`).join("");
+    const photoCode = (state.idCardMainPhoto || "").trim();
+    const photoEntry = photoCode ? photoStore.get(photoCode) : null;
+    const photoBox = photoEntry
+      ? `<div class="gov-general-photo"><img src="${photoEntry.dataUrl}"></div>`
+      : "";
+    return [`${govSectionTitle(1, "נתונים כלליים")}
+      <div class="gov-general-wrap">
+        <table class="gov-kv">${trs}</table>
+        ${photoBox}
+      </div>
+      ${immediateAttentionBlock(state)}`];
   }
 
   // תשומת לב מיידית — מוצג מודגש בעמוד הראשון, מיד מתחת לנתונים הכלליים,
@@ -149,9 +177,33 @@ const PdfExport = (() => {
     if (!rows.length) {
       return [`${govSectionTitle(3, "תיעוד סקירת רכיבים")}<table class="gov-table">${thead}<tbody><tr><td colspan="8" class="gov-empty">לא נרשמו פגמים</td></tr></tbody></table>`];
     }
+    // מקרא S/Ex/Def — כמו ב-Bridge Inspections.pdf, בעמוד האחרון של המקטע בלבד
+    const legend = `<div class="gov-legend">S = דרגת חומרה severity &nbsp;&nbsp; Ex = היקף extent &nbsp;&nbsp; Def. = פגם defect type</div>`;
+    const legendH = measureLegendHeight(legend, scratch);
     const { theadH, heights } = measureRowHeights(thead, rows, budgetInfo.contentW, scratch);
     const chunks = paginateRows(rows, heights, budgetInfo.bodyHeight - theadH);
-    return chunks.map((chunk) => `${govSectionTitle(3, "תיעוד סקירת רכיבים")}<table class="gov-table">${thead}<tbody>${chunk.join("")}</tbody></table>`);
+    // רק העמוד האחרון צריך מקום למקרא — אם השורה האחרונה לא נכנסת יחד איתו,
+    // מעבירים אותה בלבד לעמוד חדש כדי שהמקרא לא ייחתך מתחת לעמוד. מדדים לפי
+    // אינדקס (לא לפי תוכן ה-HTML) — שורות פגם זהות חוזרות על עצמן בקלות
+    // (אותו קוד/חומרה בכמה תתי-רכיבים), ו-indexOf על מחרוזת היה מוצא תמיד
+    // את המופע הראשון ומחזיר גובה שגוי
+    const lastPageRoom = budgetInfo.bodyHeight - theadH - legendH;
+    if (chunks.length) {
+      const last = chunks[chunks.length - 1];
+      const startIdx = rows.length - last.length;
+      const lastH = heights.slice(startIdx).reduce((a, b) => a + b, 0);
+      if (lastH > lastPageRoom && last.length > 1) chunks.push([last.pop()]);
+    }
+    return chunks.map((chunk, i) =>
+      `${govSectionTitle(3, "תיעוד סקירת רכיבים")}<table class="gov-table">${thead}<tbody>${chunk.join("")}</tbody></table>${i === chunks.length - 1 ? legend : ""}`);
+  }
+  function measureLegendHeight(html, scratch) {
+    const el = document.createElement("div");
+    el.innerHTML = html;
+    scratch.appendChild(el);
+    const h = el.getBoundingClientRect().height;
+    el.remove();
+    return h;
   }
 
   // ============================================================================
@@ -374,7 +426,7 @@ const PdfExport = (() => {
     const budgetInfo = { bodyHeight, contentW };
 
     const pageBodies = [
-      ...buildGeneralDataPage(state, result),
+      ...buildGeneralDataPage(state, result, photoStore),
       ...buildFindingsPages(state, budgetInfo, scratch),
       ...buildComponentReviewPages(state, budgetInfo, scratch),
       ...buildQuantitySummaryPages(state, budgetInfo, scratch, result),
