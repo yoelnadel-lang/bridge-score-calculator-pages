@@ -35,7 +35,10 @@ function photoCodesCell(photoStore, photoField) {
 // הוספה/הסרה, בדיוק כמו המספור בעמוד המקביל בדוח המודפס (buildFindingsPages).
 function renderFindingPhotos(state, photoStore) {
   const rows = state.findingPhotos.map((f, i) => `<tr>
-    <td class="serial-cell">${i + 1}</td>
+    <td class="serial-cell">
+      <button type="button" class="serial-insert-btn" data-action="finding-insert-before" data-finding="${f.uid}"
+        title="הוסף שורה חדשה מעל שורה זו">${i + 1}</button>
+    </td>
     <td><input type="text" value="${esc(f.desc)}" data-action="finding-desc" data-finding="${f.uid}" placeholder="למשל: תמונה כללית"></td>
     <td>
       <input type="text" value="${esc(f.photo)}" data-action="finding-photo" data-finding="${f.uid}" placeholder="שם התמונה, אפשר כמה מופרדים ב-;" dir="ltr">
@@ -44,7 +47,8 @@ function renderFindingPhotos(state, photoStore) {
     <td><button class="btn btn-sm btn-danger" data-action="finding-remove" data-finding="${f.uid}">✕</button></td>
   </tr>`).join("");
   return `<table class="subs-table findings-table"><tr><th>מס"ד</th><th>תיאור הממצאים</th><th>שם התמונה</th><th></th></tr>${rows}</table>
-    <button class="btn btn-sm" data-action="finding-add">➕ הוסף שורת תיעוד</button>`;
+    <button class="btn btn-sm" data-action="finding-add">➕ הוסף שורת תיעוד</button>
+    <p class="hint">לחיצה על מספר שורה מוסיפה שורה חדשה וריקה מעליה.</p>`;
 }
 
 // --- סקיצות: מיפוי קוד סקיצה לכותרת שתופיע בנספח התרשימים ---
@@ -415,8 +419,9 @@ function renderDefectForm(comp, draft) {
   const sevOptions = severities.map((n) =>
     `<option value="${n}" ${+draft.s === n ? "selected" : ""}>${n} — ${esc(short(sevTexts(n)))}</option>`
   ).join("");
+  const editing = !!draft.editUid;
   return `<div class="defect-form" data-comp="${comp.uid}">
-    <strong>הוספת פגם — לפי הפנקס לסוקר</strong>
+    <strong>${editing ? "עריכת פגם" : "הוספת פגם"} — לפי הפנקס לסוקר</strong>
     <div class="grid-2">
       <label>הפגם — הקלד קוד (למשל 14.01) או שם
         ${Combobox.html({ id: "draft-def", action: "draft-def", value: draft.def,
@@ -444,7 +449,7 @@ function renderDefectForm(comp, draft) {
     </div>
     ${errors.length ? `<p class="error-text">⚠ ${errors.map(esc).join(" · ")}</p>` : ""}
     <div class="add-row" style="margin:8px 0 0">
-      <button class="btn btn-primary btn-sm" data-action="draft-save" ${errors.length || !draft.def ? "disabled" : ""}>💾 שמור פגם</button>
+      <button class="btn btn-primary btn-sm" data-action="draft-save" ${errors.length || !draft.def ? "disabled" : ""}>💾 ${editing ? "שמור שינויים" : "שמור פגם"}</button>
       <button class="btn btn-sm" data-action="draft-cancel">ביטול</button>
     </div>
   </div>`;
@@ -565,7 +570,10 @@ function renderComponentSurveyRows(comp, ui, photoStore) {
       <td><input type="text" class="note-input" value="${esc(d.photo)}" data-action="defect-photo" data-defect="${d.uid}"
         placeholder="קוד, אפשר כמה מופרדים ב-;" dir="ltr" style="width:110px"></td>
       <td>${photoCodesCell(photoStore, d.photo)}</td>
-      <td><button class="btn btn-sm btn-danger" data-action="defect-remove" data-defect="${d.uid}">✕</button></td>
+      <td class="sub-actions">
+        ${d.def ? `<button class="btn btn-sm" data-action="defect-edit" data-defect="${d.uid}" title="עריכת הפגם — פותח מחדש את הנתונים לתיקון">✏️</button>` : ""}
+        <button class="btn btn-sm btn-danger" data-action="defect-remove" data-defect="${d.uid}">✕</button>
+      </td>
     </tr>`;
   }) : [`<tr class="${rowCls}" data-comp="${comp.uid}"><td colspan="8" class="hint">אין רשומות פגם — יחושב כתקין (1A)</td></tr>`];
   const formOpen = ui.openDefectForm === comp.uid;

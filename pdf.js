@@ -79,6 +79,33 @@ const PdfExport = (() => {
     return pages;
   }
 
+  // --- מיון היררכי-מספרי למספרי רכיב/פגם ("1.4", "9", "12", "02.07"...) —
+  // לא מיון טקסטואלי (ש"12" > "9" אבל "12" < "9" לקסיקוגרפית), אלא השוואת
+  // כל מקטע בין הנקודות כמספר בנפרד. קודים חסרים נדחים לסוף. ---
+  function naturalCodeCompare(a, b) {
+    const A = a == null || a === "" ? null : String(a);
+    const B = b == null || b === "" ? null : String(b);
+    if (A == null && B == null) return 0;
+    if (A == null) return 1;
+    if (B == null) return -1;
+    const pa = A.split("."), pb = B.split(".");
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i++) {
+      const va = parseFloat(pa[i]) || 0, vb = parseFloat(pb[i]) || 0;
+      if (va !== vb) return va - vb;
+    }
+    return 0;
+  }
+  // רכיבי מפתח ממוינים לפי מספר הקטלוג — הסדר בדוח תמיד לפי המספור, גם אם
+  // הרכיבים הוזנו למערכת בסדר אחר
+  function sortedComponents(span) {
+    return [...span.components].sort((a, b) => naturalCodeCompare(a.catalogId, b.catalogId));
+  }
+  // פגמים בתוך רכיב ממוינים לפי קוד הפגם (FF.DD)
+  function sortedDefects(comp) {
+    return [...comp.defects].sort((a, b) => naturalCodeCompare(a.def, b.def));
+  }
+
   // ============================================================================
   // מקטע 1: נתונים כלליים (עמוד אחד קבוע)
   // ============================================================================
@@ -156,9 +183,9 @@ const PdfExport = (() => {
   function buildComponentReviewPages(state, budgetInfo, scratch) {
     const rows = [];
     for (const span of state.spans) {
-      for (const c of span.components) {
+      for (const c of sortedComponents(span)) {
         if (!c.surveyed) continue;
-        for (const d of c.defects) {
+        for (const d of sortedDefects(c)) {
           if (d.note === "רכיב תקין") continue;
           const cat = DEFECT_CATALOG.defects.find((x) => x.code === d.def);
           rows.push(`<tr>
@@ -212,7 +239,7 @@ const PdfExport = (() => {
   function buildQuantitySummaryPages(state, budgetInfo, scratch, result) {
     const rows = [];
     for (const span of state.spans) {
-      for (const c of span.components) {
+      for (const c of sortedComponents(span)) {
         if (!c.surveyed || c.importance == null) continue;   // עזר/לא-נסקר לא נכלל בציון
         const defects = c.defects.map((d) => ({ sub: d.sub, s: d.s, ex: d.ex, def: d.def }));
         const calcComp = Calc.computeComponent(
@@ -261,16 +288,25 @@ const PdfExport = (() => {
   // ============================================================================
   function collectPhotoItems(state, photoStore) {
     const items = [];
-    // תמונת "תשומת לב מיידית" ראשונה בנספח — היא הדחופה ביותר
+    // הסדר כאן חייב לשקף בדיוק את סדר הופעת המקטעים בדוח עצמו (1←2←3←...)
+    // כדי שגלריית התמונות בסוף תהיה "עותק" של סדר הופעתן לאורך הדוח —
+    // תשומת לב מיידית → ממצאים (מקטע 2) → רכיבים ממוינים ← פגמים ממוינים
+    // בתוכם (מקטע 3) → ת.ז (לא חלק מ"דוח סקירה" עצמו, לכן בסוף)
     for (const code of parsePhotoCodes((state.immediateAttention || {}).photo)) {
       const entry = photoStore.get(code);
       if (entry && entry.kind === "photo") {
         items.push({ dataUrl: entry.dataUrl, filename: entry.filename, caption: "תשומת לב מיידית" });
       }
     }
+    for (const f of state.findingPhotos) {
+      for (const code of parsePhotoCodes(f.photo)) {
+        const entry = photoStore.get(code);
+        if (entry && entry.kind === "photo") items.push({ dataUrl: entry.dataUrl, filename: entry.filename, caption: f.desc || "" });
+      }
+    }
     for (const span of state.spans) {
-      for (const c of span.components) {
-        for (const d of c.defects) {
+      for (const c of sortedComponents(span)) {
+        for (const d of sortedDefects(c)) {
           const cat = DEFECT_CATALOG.defects.find((x) => x.code === d.def);
           for (const code of parsePhotoCodes(d.photo)) {
             const entry = photoStore.get(code);
@@ -280,12 +316,6 @@ const PdfExport = (() => {
             }
           }
         }
-      }
-    }
-    for (const f of state.findingPhotos) {
-      for (const code of parsePhotoCodes(f.photo)) {
-        const entry = photoStore.get(code);
-        if (entry && entry.kind === "photo") items.push({ dataUrl: entry.dataUrl, filename: entry.filename, caption: f.desc || "" });
       }
     }
     for (const group of ID_CARD_GROUPS) {
@@ -642,7 +672,7 @@ const PdfExport = (() => {
       // סיכום כמויות רכיבים (רכיב | יחידת מידה בסיסית | כמות) — לפי עמ' 5 בייחוס
       const qtyRows = [];
       for (const span of state.spans) {
-        for (const c of span.components) {
+        for (const c of sortedComponents(span)) {
           if (!c.surveyed || c.importance == null) continue;
           const qty = c.subs.reduce((a, s) => a + (+s.size || 0), 0);
           qtyRows.push(`<tr><td>${esc((c.catalogId != null ? c.catalogId + ". " : "") + c.name)}</td><td>${esc(c.unit || "")}</td><td>${fmt(qty, 2)}</td></tr>`);

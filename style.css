@@ -223,6 +223,13 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 .findings-table th:nth-child(4), .findings-table td:nth-child(4) { width: 34px; }
 .findings-table input[data-action="finding-desc"] { width: 100%; }
 .findings-table input[data-action="finding-photo"] { width: 100%; }
+.serial-insert-btn {
+  width: 100%; border: none; background: transparent; color: inherit;
+  font: inherit; font-weight: 600; cursor: pointer; padding: 2px; border-radius: 3px;
+}
+.serial-insert-btn:hover, .serial-insert-btn:focus-visible {
+  background: var(--primary-light); color: var(--primary); outline: none;
+}
 
 /* טבלת הערות הסוקר: עמודה 1 צרה לרוחב "מס"ד", עמודת ההערה (2) לוקחת את השאר */
 .surveyor-notes-table { table-layout: fixed; }
@@ -243,10 +250,10 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 .survey-col-defect { width: 27%; }
 .survey-col-sub { width: 6%; }
 .survey-col-s, .survey-col-ex { width: 4%; }
-.survey-col-notes { width: 15%; }
-.survey-col-photo { width: 12%; }
-.survey-col-status { width: 10%; }
-.survey-col-actions { width: 4%; }
+.survey-col-notes { width: 12%; }
+.survey-col-photo { width: 11%; }
+.survey-col-status { width: 9%; }
+.survey-col-actions { width: 9%; }
 .survey-table td[rowspan] { vertical-align: top; }
 /* בלי min-width — table-layout:fixed כבר קובע 18% (survey-col-name); עם
    min-width קבוע יש סיכון שיתנגש בעמודה הצרה ויחזיר את אותה בעיית הרחבה */

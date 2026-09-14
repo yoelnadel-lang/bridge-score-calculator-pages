@@ -508,7 +508,20 @@ function openDefectForm(compUid) {
   if (!found) return;
   ui.openDefectForm = compUid;
   // פגם נבחר בשדה אחד (קוד או שם) — המשפחה נגזרת אוטומטית מהקוד
-  ui.draft = { family: null, def: null, sub: found.comp.subs[0].id, s: 1, ex: "A", note: "", photo: "" };
+  ui.draft = { editUid: null, family: null, def: null, sub: found.comp.subs[0].id, s: 1, ex: "A", note: "", photo: "" };
+  scheduleUpdate(() => {
+    const input = document.querySelector(`[data-comp="${compUid}"] [data-combo-id="draft-def"] .combo-input`);
+    if (input) input.focus();
+  });
+}
+// --- פתיחת טופס הפגם לעריכת פגם קיים (גם לאחר שנשמר) — אותו טופס בדיוק,
+// אבל עם editUid כדי ש-saveDraft() יעדכן את הרשומה הקיימת ולא ייצור חדשה
+function openDefectFormForEdit(compUid, defectUid) {
+  const found = findComp(compUid);
+  const d = found && found.comp.defects.find((x) => x.uid === defectUid);
+  if (!d) return;
+  ui.openDefectForm = compUid;
+  ui.draft = { editUid: d.uid, family: d.family, def: d.def, sub: d.sub, s: d.s, ex: d.ex, note: d.note, photo: d.photo };
   scheduleUpdate(() => {
     const input = document.querySelector(`[data-comp="${compUid}"] [data-combo-id="draft-def"] .combo-input`);
     if (input) input.focus();
@@ -541,10 +554,19 @@ function saveDraft() {
   if (!d.def) return;
   const errors = Calc.validateDefect(+d.s, d.ex, found.comp.unit);
   if (errors.length) return;
-  // ברגע שנרשם פגם אמיתי, רשומת ברירת המחדל "רכיב תקין" (def=null) כבר לא
-  // נכונה — מוסרים אותה כדי שלא תופיע יחד עם הפגם החדש בטבלה.
-  found.comp.defects = found.comp.defects.filter((x) => !(x.def == null && x.note === "רכיב תקין"));
-  found.comp.defects.push({ uid: nextUid(), family: d.family, def: d.def, sub: +d.sub, s: +d.s, ex: d.ex, note: d.note, photo: d.photo });
+  if (d.editUid) {
+    // עריכת פגם קיים — מעדכנים את הרשומה במקום, לא יוצרים פגם נוסף
+    const existing = found.comp.defects.find((x) => x.uid === d.editUid);
+    if (existing) {
+      existing.family = d.family; existing.def = d.def; existing.sub = +d.sub;
+      existing.s = +d.s; existing.ex = d.ex; existing.note = d.note; existing.photo = d.photo;
+    }
+  } else {
+    // ברגע שנרשם פגם אמיתי, רשומת ברירת המחדל "רכיב תקין" (def=null) כבר לא
+    // נכונה — מוסרים אותה כדי שלא תופיע יחד עם הפגם החדש בטבלה.
+    found.comp.defects = found.comp.defects.filter((x) => !(x.def == null && x.note === "רכיב תקין"));
+    found.comp.defects.push({ uid: nextUid(), family: d.family, def: d.def, sub: +d.sub, s: +d.s, ex: d.ex, note: d.note, photo: d.photo });
+  }
   ui.openDefectForm = null; ui.draft = null;
   scheduleUpdate();
 }
@@ -883,6 +905,17 @@ function init() {
     else if (action === "finding-remove") {
       state.findingPhotos = state.findingPhotos.filter((f) => f.uid !== el.dataset.finding); scheduleUpdate();
     }
+    else if (action === "finding-insert-before") {
+      flushRowInputs("finding-photos", state.findingPhotos, "finding",
+        { "finding-desc": "desc", "finding-photo": "photo" });
+      const uid = nextUid();
+      const idx = state.findingPhotos.findIndex((f) => f.uid === el.dataset.finding);
+      state.findingPhotos.splice(idx < 0 ? 0 : idx, 0, { uid, desc: "", photo: "" });
+      scheduleUpdate(() => {
+        const inp = document.querySelector(`[data-action="finding-desc"][data-finding="${uid}"]`);
+        if (inp) inp.focus();
+      });
+    }
     else if (action === "sketch-add") {
       // כמו בממצאים: לחיצה אחת שומרת ופותחת שורה חדשה. קוד הסקיצה מקבל כברירת
       // מחדל את המספר הרץ הבא (001, 002, …) לפי הקוד המספרי הגבוה ביותר
@@ -971,6 +1004,7 @@ function init() {
       }
     }
     else if (action === "defect-open") openDefectForm(compUid);
+    else if (action === "defect-edit") openDefectFormForEdit(compUid, el.dataset.defect);
     else if (action === "defect-remove") {
       const f = findComp(compUid);
       if (f) { f.comp.defects = f.comp.defects.filter((d) => d.uid !== el.dataset.defect); scheduleUpdate(); }
@@ -979,28 +1013,53 @@ function init() {
     else if (action === "draft-cancel") { ui.openDefectForm = null; ui.draft = null; scheduleUpdate(); }
   });
 
-  // Enter בטבלאות שורה-אחר-שורה (ממצאים, סקיצות, הערות): ירידה לאותה עמודה
-  // בשורה הבאה, כמו בגיליון אלקטרוני — במקום להישאר במקום ולחכות ל-Tab שעובר
-  // דווקא לשדה הבא באותה שורה.
+  // Enter — התנהגות אחידה בכל שדה טקסט/מספר/בחירה בתוכנה, בהשראת גיליון
+  // אלקטרוני: מעבר לשדה הבא ובחירה מלאה (select) של תוכנו הקיים, כדי
+  // שהקלדה מיידית תחליף אותו בלי צורך למחוק ידנית. בטבלאות שורה-אחר-שורה
+  // (ממצאים, סקיצות, הערות, תת-רכיבים...) "הבא" הוא אותה עמודה בשורה הבאה;
+  // מחוץ לטבלה (ת.ז, כללי, מהנדס/סוקר, טופס פגם) "הבא" הוא השדה הבא לפי
+  // סדר ה-DOM בתוך אותו פאנל/טופס, כדי לא לקפוץ בין לשוניות/טפסים שונים.
   document.body.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
     const el = e.target;
     if (!el.matches || !el.matches("input, select")) return;
     if (el.classList.contains("combo-input")) return;   // לקומבו יש טיפול Enter משלו
-    const cell = el.closest("td"), row = el.closest("tr");
-    if (!cell || !row || !row.parentElement) return;
-    const rows = [...row.parentElement.children];
-    const col = [...row.cells].indexOf(cell);
-    for (let i = rows.indexOf(row) + 1; i < rows.length; i++) {
-      const next = rows[i].cells[col] &&
-        rows[i].cells[col].querySelector('input:not([type="hidden"]), select, textarea');
-      if (next) {
-        e.preventDefault();
-        next.focus();
-        if (next.select) next.select();
-        return;
+    if (el.type === "checkbox" || el.type === "radio") return;
+    const focusNext = (next) => {
+      if (!next) return false;
+      e.preventDefault();
+      next.focus();
+      if (next.select) next.select();
+      return true;
+    };
+    // טופס הפגם (הוספה/עריכה) יושב בפועל בתוך תא colspan של טבלת הסקירה —
+    // חייבים לבדוק אותו לפני הבדיקה הגנרית של td/tr, אחרת "השדה הבא" ייבדק
+    // מול שורות הטבלה (ואין כאלה אחרי שורת הפעולה האחרונה) במקום מול שדות הטופס עצמו.
+    const form = el.closest(".defect-form");
+    const cell = form ? null : el.closest("td"), row = form ? null : el.closest("tr");
+    if (cell && row && row.parentElement) {
+      const rows = [...row.parentElement.children];
+      const col = [...row.cells].indexOf(cell);
+      for (let i = rows.indexOf(row) + 1; i < rows.length; i++) {
+        const next = rows[i].cells[col] &&
+          rows[i].cells[col].querySelector('input:not([type="hidden"]), select, textarea');
+        if (focusNext(next)) return;
       }
+      return;   // שורה אחרונה בטבלה — לא קופצים לשדה לא-קשור מחוץ לטבלה
     }
+    // מחוץ לטבלה: השדה הבא לפי סדר ה-DOM בתוך אותו פאנל (details) או טופס
+    // הפגם (.defect-form) — הקרוב מביניהם נבחר, כך שטופס הפגם (המקונן
+    // בתוך לשונית "סקירת המבנה") נשאר מוגבל לשדות שלו בלבד.
+    const container = form || el.closest("details");
+    if (!container) return;
+    const focusables = [...container.querySelectorAll(
+      'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), select, textarea'
+    )].filter((f) => !f.disabled && !f.readOnly && f.offsetParent !== null);
+    const idx = focusables.indexOf(el);
+    if (idx === -1 || idx === focusables.length - 1) return;
+    const next = focusables[idx + 1];
+    if (next.classList.contains("combo-input")) return;   // לקומבו יש טיפול Enter משלו
+    focusNext(next);
   });
 
   document.body.addEventListener("change", (e) => {
