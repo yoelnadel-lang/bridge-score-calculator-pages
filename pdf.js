@@ -505,9 +505,20 @@ const PdfExport = (() => {
     return manifest.length;
   }
 
+  // --- קובץ התרשימים (DWG): נוסף ל-ZIP רק אם נבחר בפועל דרך הכפתור (יש
+  // Blob אמיתי בזיכרון) — לא כשהשם הוקלד ידנית בלי קובץ מאחוריו. כך מנהל
+  // האחזקה מקבל את השרטוט עצמו יחד עם הדוח, במקום רק שם קובץ שצריך לחפש
+  // בנפרד במערכת אחרת ---
+  const ZIP_DRAWINGS_DIR = "קובץ תרשימים";
+  function addDrawingsFileToZip(zip) {
+    if (!drawingsFileAttached || !drawingsFileBlob) return false;
+    zip.file(`${ZIP_DRAWINGS_DIR}/${state.drawingsFile || "תרשים.dwg"}`, drawingsFileBlob);
+    return true;
+  }
+
   // --- ייצוא חבילת ZIP: דוח הסקירה (PDF) + קובץ טעינה (JSON, כל מה שהוזן —
-  // בלי תמונות, כמו ה-state עצמו) + תיקיית התמונות עצמן. טעינה חוזרת של
-  // ה-ZIP כולו משחזרת גם את התמונות; טעינת ה-JSON לבדו — רק את הטקסט ---
+  // בלי תמונות, כמו ה-state עצמו) + תיקיית התמונות + קובץ התרשימים אם צורף.
+  // טעינה חוזרת של ה-ZIP כולו משחזרת את הכול; טעינת ה-JSON לבדו — רק טקסט ---
   async function exportZip() {
     if (!hasAnyComponents()) { alert("אין נתונים לייצוא — הוסף רכיבים תחילה."); return; }
     const scratch = makeScratch();
@@ -521,6 +532,7 @@ const PdfExport = (() => {
       zip.file(`דוח סקירה - ${baseName}.pdf`, pdf.output("blob"));
       zip.file(`קובץ טעינה - ${baseName}.json`, JSON.stringify(state, null, 2));
       addPhotosToZip(zip);
+      addDrawingsFileToZip(zip);
       const zipBlob = await zip.generateAsync({ type: "blob" });
 
       const url = URL.createObjectURL(zipBlob);

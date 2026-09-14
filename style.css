@@ -144,7 +144,11 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 @media (max-width: 860px) { .survey-split { flex-direction: column; } }
 
 .survey-master {
-  flex: 0 0 300px; max-width: 300px; max-height: 640px; overflow-y: auto;
+  flex: 0 0 300px; max-width: 300px; max-height: 640px;
+  /* overflow: hidden auto — לא רק overflow-y. בלי חסימת ציר X, כל תוכן שיוצא
+     רחב מ-300px (תווית ארוכה, גופן אחר, זום דפדפן) לא נחסם בגבול התיבה
+     וממשיך לצייר ימינה, מעל התוכן שבצד ה"פירוט" — בדיוק התקלה שדווחה */
+  overflow: hidden auto;
   border: 1px solid var(--grid-border); border-radius: 2px;
 }
 @media (max-width: 860px) { .survey-master { flex-basis: auto; max-width: none; max-height: 320px; } }
@@ -155,14 +159,17 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 .survey-master-row {
   display: flex; align-items: center; gap: 6px; padding: 6px 10px;
   font-size: .82rem; border: none; border-bottom: 1px solid var(--grid-border);
-  cursor: pointer; background: #fff; width: 100%; text-align: start;
-  font-family: inherit; color: inherit;
+  cursor: pointer; background: #fff; width: 100%; max-width: 100%; box-sizing: border-box;
+  overflow: hidden; text-align: start; font-family: inherit; color: inherit;
 }
 .survey-master-row:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 .survey-master-row:hover { background: var(--primary-light); }
 .survey-master-row.active { background: var(--select-bg); border-inline-start: 3px solid var(--select-border); }
 .survey-master-row.not-surveyed { opacity: .55; }
-.survey-master-row .cm-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* min-width:0 הוא הכרחי, לא קוסמטי — ילד flex לא מתכווץ מתחת לרוחב התוכן
+   הפנימי שלו בלי זה, ואז text-overflow:ellipsis לא נכנס לפעולה בכלל */
+.survey-master-row .cm-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.survey-master-row .badge { flex: 0 0 auto; }
 .survey-master-empty { padding: 16px 10px; color: #57606a; font-size: .85rem; text-align: center; }
 
 .survey-detail { flex: 1 1 auto; min-width: 0; }

@@ -37,10 +37,13 @@ const ui = { activeTab: "general", openDefectForm: null, draft: null, idCardTab:
 // code -> { dataUrl, filename, kind: "photo"|"sketch" }
 const photoStore = new Map();
 
-// קובץ התרשימים (DWG) הוא לא תמונה — אין מה להטמיע ב-PDF, ולכן לא נשמר
-// בתוכן עצמו, רק סימון session-בלבד (כמו photoStore) שקובץ נבחר בפועל,
-// כדי להבדיל מהקלדה ידנית של שם קובץ בלי שנבחר קובץ אמיתי.
+// קובץ התרשימים (DWG) הוא לא תמונה — אין מה להטמיע אותו ב-PDF עצמו (פורמט
+// CAD, לא ניתן להצגה כתמונה) — אבל הוא נשמר כ-Blob בזיכרון (session-בלבד,
+// כמו photoStore) כדי שאפשר יהיה לצרף אותו בפועל ל-ZIP בזמן הייצוא, ולא רק
+// לרשום את שמו כטקסט. drawingsFileAttached מבדיל בין "נבחר קובץ אמיתי דרך
+// הכפתור" (יש Blob) לבין הקלדה ידנית של שם קובץ בלי שהוא נבחר בפועל.
 let drawingsFileAttached = false;
+let drawingsFileBlob = null;
 
 // קורא ישירות מה-DOM את מה שהוקלד בשורות של רשימה, לפני פעולה שמרנדרת אותה
 // מחדש (הוספת שורה). אירוע ה-change של שדה תלוי ב-blur, וסדר blur/click אינו
@@ -181,9 +184,10 @@ function applyRecoveredState(newState) {
   // המבנה והקודים של אותה גרסה, וחייב לעבור את אותן התאמות
   state = migrateState(newState);
   bumpUidCounterPast(state);
-  // הסימון ✔ שייך לקובץ שנבחר בסשן הנוכחי — הנתונים המשוחזרים נושאים רק את
-  // שם הקובץ, ולכן הסימון חייב להתאפס כדי לא להצהיר על קובץ שלא נבחר
+  // הסימון ✔ שייך לקובץ שנבחר בסשן הנוכחי — קוד QR מקודד טקסט בלבד, ולכן
+  // הנתונים המשוחזרים נושאים רק את שם הקובץ, לא את תוכנו
   drawingsFileAttached = false;
+  drawingsFileBlob = null;
   ui.activeTab = "general"; ui.idCardTab = "general"; ui.compTab = "summary"; ui.openDefectForm = null;
   closeQrScan();
   update();
@@ -213,6 +217,7 @@ async function loadStateFromZip(file) {
   catch (e) { alert("לא ניתן לקרוא את קובץ ה-ZIP שנבחר."); return; }
 
   const manifestFile = zip.file(/רשימת-תמונות\.json$/)[0];
+  const drawingsEntry = zip.file(/^קובץ תרשימים\//)[0];
   const stateFile = zip.file(/\.json$/i).find((f) => f !== manifestFile);
   if (!stateFile) { alert("לא נמצא קובץ טעינה (JSON) בתוך ה-ZIP."); return; }
 
@@ -221,7 +226,8 @@ async function loadStateFromZip(file) {
   catch (e) { alert("קובץ הטעינה שבתוך ה-ZIP פגום."); return; }
 
   const manifest = manifestFile ? JSON.parse(await manifestFile.async("string")) : [];
-  if (!confirm(`לטעון את הסקירה מה-ZIP? זה יחליף את הנתונים הנוכחיים בטופס (כולל ${manifest.length} תמונות).`)) return;
+  const drawingsNote = drawingsEntry ? " וקובץ תרשימים" : "";
+  if (!confirm(`לטעון את הסקירה מה-ZIP? זה יחליף את הנתונים הנוכחיים בטופס (כולל ${manifest.length} תמונות${drawingsNote}).`)) return;
 
   applyLoadedState(parsed);
   photoStore.clear();
@@ -233,6 +239,12 @@ async function loadStateFromZip(file) {
       dataUrl: `data:${item.mime};base64,${b64}`, filename: item.filename, kind: item.kind,
     });
   }
+  // שם הקובץ (state.drawingsFile) כבר משוחזר מה-JSON — כאן משחזרים רק את
+  // ה-Blob עצמו ואת סימון ה-✔, כדי שאפשר יהיה לצרף אותו מחדש בייצוא הבא
+  if (drawingsEntry) {
+    drawingsFileBlob = await drawingsEntry.async("blob");
+    drawingsFileAttached = true;
+  }
   update();
 }
 
@@ -240,6 +252,7 @@ function applyLoadedState(parsed) {
   state = migrateState(parsed);
   bumpUidCounterPast(state);
   drawingsFileAttached = false;
+  drawingsFileBlob = null;
   ui.activeTab = "general"; ui.idCardTab = "general"; ui.compTab = "summary"; ui.openDefectForm = null;
   update();
 }
@@ -658,6 +671,13 @@ function update() {
   document.getElementById("ia-photo").value = state.immediateAttention.photo;
   document.getElementById("ia-photo-status").innerHTML =
     photoCodesCell(photoStore, state.immediateAttention.photo) || '<span class="hint">לא נרשם קוד</span>';
+  // תמונת חזית המבנה: אותו state.idCardMainPhoto נערך משני מקומות (כללי + ת.ז),
+  // כדי שאפשר יהיה להזין אותה בלי למלא ת.ז כלל — שני השדות מסונכרנים כאן יחד
+  document.getElementById("general-main-photo").value = state.idCardMainPhoto;
+  document.getElementById("general-main-photo-status").innerHTML =
+    photoCodesCell(photoStore, state.idCardMainPhoto) || '<span class="hint">לא נרשם קוד</span>';
+  document.getElementById("idcard-photo-status").innerHTML =
+    photoCodesCell(photoStore, state.idCardMainPhoto) || '<span class="hint">לא נרשם קוד</span>';
   updateInspection();
   document.getElementById("wrap-supertype").hidden = !(state.structureClass === "BRG" || state.structureClass === "CLV");
   document.getElementById("wrap-tunneltype").hidden = state.structureClass !== "TUN";
@@ -734,6 +754,7 @@ function loadExample() {
   }));
   state = st;
   drawingsFileAttached = false;   // הדוגמה לא נושאת קובץ תרשימים שנבחר בסשן
+  drawingsFileBlob = null;
   ui.activeTab = "results"; ui.idCardTab = "general"; ui.compTab = "summary"; ui.openDefectForm = null;
   update();
 }
@@ -789,8 +810,10 @@ function init() {
   document.getElementById("st-road-number").addEventListener("input", (e) => { state.roadNumber = e.target.value; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); });
   document.getElementById("drawings-file").addEventListener("input", (e) => {
     state.drawingsFile = e.target.value;
-    // עריכה ידנית של שם הקובץ אחרי שנבחר קובץ אמיתי — הסימון ✔ כבר לא מדויק
+    // עריכה ידנית של שם הקובץ אחרי שנבחר קובץ אמיתי — הסימון ✔ כבר לא מדויק,
+    // ואין לנו את תוכן הקובץ שמתאים לשם החדש שהוקלד
     drawingsFileAttached = false;
+    drawingsFileBlob = null;
     document.getElementById("drawings-file-status").innerHTML = '<span class="photo-chip missing">לא הועלה קובץ עדיין</span>';
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   });
@@ -800,6 +823,7 @@ function init() {
     if (!file) return;
     state.drawingsFile = file.name;
     drawingsFileAttached = true;
+    drawingsFileBlob = file;   // נשמר בזיכרון כדי לצרף בפועל ל-ZIP בייצוא
     e.target.value = "";
     scheduleUpdate();
   });
@@ -1178,6 +1202,7 @@ function init() {
     // ימשיכו להצהיר על קבצים של המבנה הקודם
     photoStore.clear();
     drawingsFileAttached = false;
+    drawingsFileBlob = null;
     ui.activeTab = "general"; ui.idCardTab = "general"; ui.compTab = "summary"; ui.openDefectForm = null;
     update();
   });
