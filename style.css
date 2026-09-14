@@ -87,6 +87,12 @@ main { max-width: 1200px; margin: 0 auto; padding: 0 14px 40px; }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; }
 @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } }
+/* min-width:0 על ילדי הגריד — בלעדיו רצועת גריד (1fr) לא מתכווצת מתחת לרוחב
+   התוכן הפנימי (ברירת המחדל היא minmax(auto,1fr), לא minmax(0,1fr)). שדה
+   כמו <select> עם טקסט אופציות ארוך "דורש" רצועה רחבה יותר, וה-max-width:100%
+   שכבר יש על ה-select לא עוזר — הוא מגביל רק בתוך הרצועה שכבר התרחבה,
+   אחרי שהיא כבר דחפה את שאר הפריסה (כאן: מעבר לגבול הטבלה שמסביב) */
+.grid-2 > * { min-width: 0; }
 
 label { display: flex; flex-direction: column; gap: 4px; font-size: .88rem; font-weight: 600; }
 input, select, textarea {
@@ -225,10 +231,26 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 .surveyor-notes-table input[data-action="note-text"] { width: 100%; }
 .sub-actions { white-space: nowrap; }
 
-/* לשונית "סקירת המבנה": טבלה אחת למפתח — עמודת "רכיב" ב-rowspan מקבצת את
-   שורות הרכיב יחד במקום כרטיס/כותרת נפרדים, כדי לצמצם גלילה */
+/* לשונית "סקירת המבנה": טבלה אחת לרכיב — עמודת "רכיב" ב-rowspan מקבצת את
+   שורות הרכיב יחד במקום כרטיס/כותרת נפרדים, כדי לצמצם גלילה.
+   table-layout:fixed + רוחבים מפורשים על שורת הכותרת — קריטי: בלעדיהם
+   table-layout:auto (ברירת המחדל) מתייחס ל-width:100% כמינימום בלבד, ותא
+   ה-colspan שמכיל את טופס הוספת הפגם (שדות רחבים, קומבו לחיפוש) "מדרוש"
+   יותר רוחב ומרחיב את הטבלה כולה מעבר לגבול .survey-detail — ב-RTL זה
+   יוצא שמאלה, ישר לתוך רשימת הרכיבים שלצד הטבלה (התקלה שדווחה). */
+.survey-table { table-layout: fixed; }
+.survey-col-name { width: 18%; }
+.survey-col-defect { width: 27%; }
+.survey-col-sub { width: 6%; }
+.survey-col-s, .survey-col-ex { width: 4%; }
+.survey-col-notes { width: 15%; }
+.survey-col-photo { width: 12%; }
+.survey-col-status { width: 10%; }
+.survey-col-actions { width: 4%; }
 .survey-table td[rowspan] { vertical-align: top; }
-.comp-name-cell { min-width: 170px; }
+/* בלי min-width — table-layout:fixed כבר קובע 18% (survey-col-name); עם
+   min-width קבוע יש סיכון שיתנגש בעמודה הצרה ויחזיר את אותה בעיית הרחבה */
+.comp-name-cell { overflow-wrap: break-word; }
 .comp-name-cell-inner { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .comp-name-cell-inner .comp-title { font-weight: 700; }
 .survey-table tr.not-surveyed > td { opacity: .55; }

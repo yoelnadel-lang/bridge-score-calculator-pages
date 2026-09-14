@@ -618,8 +618,17 @@ function renderSurveyDetail(state, ui, photoStore) {
     if (comp) break;
   }
   if (!comp) return '<div class="survey-detail-empty">בחר רכיב מהרשימה מימין כדי לרשום לו פגמים.</div>';
+  // רוחבי העמודות מוגדרים על שורת הכותרת בלבד (table-layout:fixed משתמש
+  // בה, לא בשורות הבאות) — בלעדיהם, טופס הוספת הפגם הפתוח (בתא ה-colspan)
+  // "דורש" רוחב תוכן ומרחיב את הטבלה כולה מעבר לגבול התיבה שלה, ובמסך RTL
+  // ההתרחבות הזו יוצאת שמאלה — ישר לתוך רשימת הרכיבים שלצד הטבלה
   return `<table class="defects-table survey-table">
-    <tr><th>רכיב</th><th>פגם</th><th>תת-רכיב</th><th>S</th><th>Ex</th><th>הערות</th><th>קוד תמונה</th><th>סטטוס</th><th></th></tr>
+    <tr>
+      <th class="survey-col-name">רכיב</th><th class="survey-col-defect">פגם</th>
+      <th class="survey-col-sub">תת-רכיב</th><th class="survey-col-s">S</th><th class="survey-col-ex">Ex</th>
+      <th class="survey-col-notes">הערות</th><th class="survey-col-photo">קוד תמונה</th>
+      <th class="survey-col-status">סטטוס</th><th class="survey-col-actions"></th>
+    </tr>
     ${renderComponentSurveyRows(comp, ui, photoStore)}
   </table>`;
 }
