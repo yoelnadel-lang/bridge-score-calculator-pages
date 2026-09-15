@@ -111,7 +111,6 @@ const PdfExport = (() => {
   // ============================================================================
   function buildGeneralDataPage(state, result, photoStore) {
     const insp = computeNextInspection(state);
-    const fmtDate = (d) => (d ? d.toLocaleDateString("he-IL") : "—");
     // שורה אחת לכל שדה, כמו בעמוד המקביל ב-Bridge Inspections.pdf (לא שני
     // שדות זה-לצד-זה) — קודי הסעיפים שכבר קיימים ב-ID_CARD_GROUPS חוזרים כאן
     // לעקביות עם לשונית ת.ז
@@ -128,8 +127,8 @@ const PdfExport = (() => {
       ["04.01", "מספר מפתחים / יחידות", String(state.spanCount)],
       [null, "שם הסוקר", esc(state.surveyorName || "—")],
       [null, "שם החברה", esc(state.companyName || "—")],
-      [null, "תאריך הסקירה הנוכחית", esc(state.inspDate || "—")],
-      [null, "תאריך הסקירה הבאה (מומלץ)", insp ? fmtDate(insp.effective) : "—"],
+      [null, "תאריך הסקירה הנוכחית", esc(fmtIsoDate(state.inspDate))],
+      [null, "תאריך הסקירה הבאה (מומלץ)", esc(insp ? fmtDateDMY(insp.effective) : "—")],
       [null, "CPI Average", `<span class="gov-kv-cpi">${fmt(result.bridge.method_norm.cpiAv)}</span>`],
       [null, "CPI Critical", `<span class="gov-kv-cpi">${fmt(result.bridge.cpiCrit)}</span>`],
     ];
@@ -269,18 +268,28 @@ const PdfExport = (() => {
   }
 
   // ============================================================================
-  // מקטע 5: הערות הסוקר — פרשנות אוטומטית של CPI Av/Crit לפי טבלה 15
+  // מקטע 5: הערות הסוקר — פרשנות אוטומטית של CPI Av/Crit לפי טבלה 15, ולאחריה
+  // ההערות החופשיות שהסוקר הזין בפועל בלשונית "הערות הסוקר" (state.surveyorNotes).
+  // עד כה הן נשמרו בנתונים (ZIP/QR) אבל לא הופקו בדוח כלל — למרות שהמקטע כאן
+  // נקרא באותו שם בדיוק, מה שיצר רושם מטעה שהן "כן" מודפסות איפשהו.
   // (התקציר האינטראקטיבי עצמו — מדי המהירות — עבר למסמך נפרד, ר' exportSummary)
   // ============================================================================
-  function buildSurveyorNotesPage(result) {
+  function buildSurveyorNotesPage(state, result, budgetInfo, scratch) {
     const av = Calc.meaning(result.bridge.method_norm.cpiAv, MEANING_AV);
     const crit = Calc.meaning(result.bridge.cpiCrit, MEANING_CRIT);
     const items = [];
     if (av) items.push(`ציון CPI Average = ${fmt(result.bridge.method_norm.cpiAv)} מגדיר את מצבו הכללי של המבנה כ"${esc(av.name)}". ${esc(av.text)}`);
     if (crit) items.push(`ציון CPI Critical = ${fmt(result.bridge.cpiCrit)} מגדיר את מצבו הכללי של המבנה כ"${esc(crit.name)}". ${esc(crit.text)}`);
     items.push("הכלי הוא עזר חישובי בלבד; האחריות המקצועית על הסוקר והמהנדס.");
-    const rows = items.map((t, i) => `<tr><td>${i + 1}</td><td>${t}</td></tr>`).join("");
-    return [`${govSectionTitle(5, "הערות הסוקר")}<table class="gov-table gov-notes"><thead><tr><th>מספר</th><th>תיאור</th></tr></thead><tbody>${rows}</tbody></table>`];
+    for (const n of state.surveyorNotes) {
+      if (n.text && n.text.trim()) items.push(esc(n.text));
+    }
+    const rows = items.map((t, i) => `<tr><td>${i + 1}</td><td>${t}</td></tr>`);
+    const thead = `<thead><tr><th>מספר</th><th>תיאור</th></tr></thead>`;
+    const { theadH, heights } = measureRowHeights(thead, rows, budgetInfo.contentW, scratch);
+    const chunks = paginateRows(rows, heights, budgetInfo.bodyHeight - theadH);
+    return chunks.map((chunk) =>
+      `${govSectionTitle(5, "הערות הסוקר")}<table class="gov-table gov-notes">${thead}<tbody>${chunk.join("")}</tbody></table>`);
   }
 
   // ============================================================================
@@ -460,7 +469,7 @@ const PdfExport = (() => {
       ...buildFindingsPages(state, budgetInfo, scratch),
       ...buildComponentReviewPages(state, budgetInfo, scratch),
       ...buildQuantitySummaryPages(state, budgetInfo, scratch, result),
-      ...buildSurveyorNotesPage(result),
+      ...buildSurveyorNotesPage(state, result, budgetInfo, scratch),
       ...buildPhotoPages(collectPhotoItems(state, photoStore)),
       ...buildSketchPages(state, photoStore),
       ...buildQrAppendixPages(state),

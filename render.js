@@ -10,6 +10,20 @@ function esc(s) {
 function fmt(v, digits = 2) {
   return v == null || isNaN(v) ? "—" : (+v).toFixed(digits);
 }
+// תאריך ISO ("YYYY-MM-DD", כפי שנשמר מ-<input type="date">) לפורמט DD/MM/YYYY
+// לתצוגה בדוחות — בלי לעבור דרך Date() כדי לא להיתקל בהזזת אזור-זמן
+function fmtIsoDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "—";
+}
+// אובייקט Date (למשל תאריך סקירה הבאה שמחושב מהתאריך הנוכחי) לאותו פורמט —
+// שעון מקומי, עקבי עם השעון שכבר שימש לחישוב התאריך עצמו
+function fmtDateDMY(d) {
+  if (!d) return "—";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
 
 // --- breadcrumb עליון ---
 function renderBreadcrumb(state) {
@@ -120,8 +134,8 @@ function idCardAutoFields(groupId, state, result) {
       { code: "10.1", label: "Condition PIav", value: result ? fmt(result.bridge.method_norm.cpiAv) : "—" },
       { code: "10.2", label: "Condition PIcrit", value: result ? fmt(result.bridge.cpiCrit) : "—" },
       { code: "13.1", label: "סיווג לסקירה", value: freq ? freq.label : "—" },
-      { code: "13.2", label: "תאריך ביצוע סקירה (קודמת)", value: state.prevInspDate || "—" },
-      { code: "13.3", label: "תאריך ביצוע סקירה (נוכחית)", value: state.inspDate || "—" },
+      { code: "13.2", label: "תאריך ביצוע סקירה (קודמת)", value: fmtIsoDate(state.prevInspDate) },
+      { code: "13.3", label: "תאריך ביצוע סקירה (נוכחית)", value: fmtIsoDate(state.inspDate) },
       { code: "13.4", label: "תדירות ביצוע סקירה שגרתית [חודש]", value: DEFAULT_NEXT_INSPECTION_MONTHS },
     ];
   }
