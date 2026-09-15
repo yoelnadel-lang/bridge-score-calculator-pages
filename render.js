@@ -272,7 +272,9 @@ function renderUnitFormulas(unit) {
   return html;
 }
 
-function renderControlAudit(state, result) {
+// forPdf=true: מיועד ל"ייצוא חישוב ציון" (pdf.js, exportCalculation) — משמיט
+// את ההערה על אי-הדפסה (שרלוונטית רק למסך החי) ומדפיס את כל הבקרה במלואה
+function renderControlAudit(state, result, forPdf) {
   if (!result) return '<p class="empty-note">הבקרה תוצג אוטומטית לאחר הזנת רכיבים.</p>';
   const dimLabel = STRUCTURE_CLASSES[state.structureClass].dimLabel;
   const thead = `<tr><th>רכיב</th><th>חשיבות</th><th>S מקס'</th><th>Ext</th><th>ECS</th>
@@ -286,8 +288,8 @@ function renderControlAudit(state, result) {
     <li>רכיבי המפתח משוקללים יחד לציון <strong>SCS</strong>.</li>
     <li>ה-SCS מומר לציון <strong>Condition PI</strong> (משוואות 8.1–8.2).</li>
   </ol>
-  <p class="hint">המסך הזה אינו מודפס במלואו — הדוח המודפס כולל את מקטע [4] (סיכום כמויות וציוני ECS),
-    שהוא כבר העמוד המקביל בדוח הרשמי של נתיבי ישראל.</p>`;
+  ${forPdf ? "" : `<p class="hint">המסך הזה אינו מודפס במלואו — לייצוא מלא ומעוצב של הבקרה, לרבות כל הנוסחאות
+    וההצבות, יש להשתמש בכפתור "🧮 ייצוא חישוב ציון".</p>`}`;
 
   state.spans.forEach((span, i) => {
     const comps = result.spans[i].comps;
@@ -724,6 +726,10 @@ function renderResults(state, result) {
 }
 
 // --- מד מהירות (0–100) — קשת צבועה לפי טווחי טבלה 15, מחט על הציון ---
+// title/subtitle: HTML מוכן מראש (לא נמלט כאן) — כך שקריאה יכולה לעטוף
+// מונחים באנגלית ב-<bdi> למניעת בלבול bidi מול הטקסט העברי הסמוך, בלי
+// ש-esc() ימחק את התגית. שני הקוראים היחידים (renderSummary) מעבירים
+// מחרוזות קבועות בקוד, לא נתוני משתמש — אין כאן סיכון הזרקה
 function gaugeSVG(value, bands, meaningRow, title, subtitle) {
   const cx = 110, cy = 104, r = 86, W = 220, H = 118;
   const pt = (v, rad) => {
@@ -753,13 +759,28 @@ function gaugeSVG(value, bands, meaningRow, title, subtitle) {
   }
   const color = meaningRow ? meaningRow.color : "#999";
   return `<div class="gauge">
-    <div class="gauge-title">${esc(title)}</div>
-    <div class="gauge-sub">${esc(subtitle || "")}</div>
+    <div class="gauge-title">${title}</div>
+    <div class="gauge-sub">${subtitle || ""}</div>
     <svg viewBox="0 0 ${W} ${H}" dir="ltr" xmlns="http://www.w3.org/2000/svg">${segs}${ticks}${needle}</svg>
     <div class="gauge-value" style="color:${color}">${fmt(value)}</div>
     <div class="gauge-name" style="color:${color}">${meaningRow ? esc(meaningRow.name) : "הזן מימד שקלול לכל מפתח"}</div>
     ${meaningRow ? `<div class="gauge-meaning">${esc(meaningRow.text)}</div>` : ""}
   </div>`;
+}
+
+// --- פסקת "פגם משמעותי" בתקציר המנהלים: סיבה/השלכה/כיוון תיקון כלליים
+// מתוך DEFECT_GUIDANCE (defect_guidance.js), פרוזה רציפה ופורמלית — לא
+// רשימת תבליטים. ציטוט הערת הסוקר (אם הוזנה) מובא בנפרד ומילולית, כדי
+// שהמידע הספציפי שהוזן בפועל יישאר מובחן מהתוכן הגנרי ---
+function significantDefectNarrative(comp, defect, scoreLabelHtml) {
+  const cat = DEFECT_CATALOG.defects.find((x) => x.code === defect.def);
+  const guide = DEFECT_GUIDANCE[defect.def];
+  if (!cat || !guide) return "";
+  const opening = `הפגם המשמעותי שהשפיע על ציון המבנה ${scoreLabelHtml} הינו ${esc(cat.name_he)} (<bdi>${esc(cat.code)}</bdi>) ב${esc(comp.name)}.`;
+  const body = `${opening} ${esc(guide.cause)} ${esc(guide.consequence)} ${esc(guide.remedy)}`;
+  const note = (defect.note || "").trim();
+  const noteBlock = note ? `<p class="defect-note-quote">הערת הסוקר לפגם זה: "${esc(note)}"</p>` : "";
+  return `<p>${body}</p>${noteBlock}`;
 }
 
 // --- תקציר מנהלים ---
@@ -772,23 +793,29 @@ function renderSummary(state, result, summary) {
 
   // מבנה מרובה-מפתחים ללא מימדי שקלול — הציון עדיין null, אין להפיל את הרינדור
   html += `<h3>הציונים ומשמעותם</h3><div class="gauges">
-    ${gaugeSVG(b.method_norm.cpiAv, MEANING_AV, b.meaningAv, "CPIav — ציון ממוצע", "לפי הנוהל, משוואה 6.2 · טבלה 15")}
-    ${gaugeSVG(b.cpiCrit, MEANING_CRIT, b.meaningCrit, "CPIcrit — הרכיב הקריטי", "הרכיב הגרוע בחשיבות \"גבוהה מאוד\" · טבלה 15")}
+    ${gaugeSVG(b.method_norm.cpiAv, MEANING_AV, b.meaningAv, "<bdi>CPIav</bdi> — ציון ממוצע", "לפי הנוהל, משוואה 6.2 · טבלה 15")}
+    ${gaugeSVG(b.cpiCrit, MEANING_CRIT, b.meaningCrit, "<bdi>CPIcrit</bdi> — הרכיב הקריטי", "הרכיב הגרוע בחשיבות \"גבוהה מאוד\" · טבלה 15")}
   </div>`;
 
   if (summary.criticalComp) {
     const c = summary.criticalComp;
-    const defs = (c.defects || []).filter((d) => d.s === c.sMax).map((d) => {
+    const criticalDefects = (c.defects || []).filter((d) => d.s === c.sMax && d.def);
+    const defs = criticalDefects.map((d) => {
       const cat = DEFECT_CATALOG.defects.find((x) => x.code === d.def);
       return `${d.def || ""}${cat ? " — " + cat.name_he : d.note ? " — " + d.note : ""}`;
     });
-    html += `<h3>🔴 הרכיב הקריטי (קובע את CPIcrit)</h3>
+    html += `<h3>הרכיב הקריטי (קובע את ציון <bdi>CPIcrit</bdi>)</h3>
       <p><strong>${esc(c.name)}</strong>${result.singleUnit ? "" : ` · מפתח ${esc(c.spanId)}`}${
         defs.length ? " · פגם: " + defs.map(esc).join("; ") : ""}</p>`;
+    const narratives = criticalDefects.map((d) => significantDefectNarrative(c, d, "הקריטי")).filter(Boolean);
+    if (narratives.length) {
+      html += `<div class="defect-narrative">${narratives.join("")}
+        <p class="hint">התוכן לעיל הוא הנחיה הנדסית כללית בלבד, ואינו תחליף לחוות דעת מהנדס; האחריות המקצועית על הסוקר והמהנדס הבוחן.</p></div>`;
+    }
   }
 
   if (summary.notSurveyed.length) {
-    html += `<h3>⚠️ רכיבים שלא נסקרו</h3>
+    html += `<h3>רכיבים שלא נסקרו</h3>
       <p>${summary.notSurveyed.length} רכיב/ים קיימים במבנה אך סומנו "לא ניתן לסקירה" — לא נכללו בציון:
       ${summary.notSurveyed.map((c) => esc(c.name)).join("; ")}.</p>`;
   }

@@ -23,8 +23,13 @@ const PdfExport = (() => {
   const SCALE = 2;
   const JPEG_QUALITY = 0.92;
 
-  function makeScratch() {
+  // cls: המחלקה שבתוכה בפועל יירונדר התוכן שנמדד כאן (gov-page/idcard-page) —
+  // קריטי כי font-size שונה בין המחלקות (13.3px מול 11px), ומדידת גובה שורה
+  // בלי המחלקה הנכונה (ברירת המחדל של body, 16px) מגדילה את האומדן ב-15%+
+  // ומובילה את paginateRows לעצור מוקדם מדי ולהשאיר שטח עמוד לא מנוצל
+  function makeScratch(cls) {
     const el = document.createElement("div");
+    if (cls) el.className = cls;
     el.style.cssText = "position:absolute;top:0;left:-20000px;background:#fff;";
     document.body.appendChild(el);
     return el;
@@ -33,7 +38,14 @@ const PdfExport = (() => {
   // --- כותרת חוזרת בראש כל עמוד (שם/מספר מבנה, סוקר, חברה, דף N מתוך M) ---
   // "דו"ח סקירה" מופיע רק בעמוד הראשון, מעל הטבלה החוזרת — כך גם במקור
   function govHeaderHTML(state, pageNum, totalPages) {
-    const title = pageNum === 1 ? `<div class="gov-report-title">דו"ח סקירה</div>` : "";
+    // לוגו החברה (קבוע, logo.jpeg) ולוגו מזמין העבודה (state.clientLogoDataUrl,
+    // אם הועלה) בשתי הפינות של עמוד 1 בלבד — תיבה ריקה משני הצדדים גם כש
+    // חסר לוגו אחד, כדי שהכותרת תישאר ממורכזת ולא תיסחף לצד אחד
+    const title = pageNum === 1 ? `<div class="gov-title-row">
+      <div class="gov-logo-box">${state.clientLogoDataUrl ? `<img src="${esc(state.clientLogoDataUrl)}">` : ""}</div>
+      <div class="gov-report-title">דו"ח סקירה</div>
+      <div class="gov-logo-box"><img src="logo.jpeg"></div>
+    </div>` : "";
     return `${title}<table class="gov-head">
       <tr>
         <td class="gov-head-label">שם המבנה:</td><td>${esc(state.name || "—")}</td>
@@ -203,8 +215,11 @@ const PdfExport = (() => {
     if (!rows.length) {
       return [`${govSectionTitle(3, "תיעוד סקירת רכיבים")}<table class="gov-table">${thead}<tbody><tr><td colspan="8" class="gov-empty">לא נרשמו פגמים</td></tr></tbody></table>`];
     }
-    // מקרא S/Ex/Def — כמו ב-Bridge Inspections.pdf, בעמוד האחרון של המקטע בלבד
-    const legend = `<div class="gov-legend">S = דרגת חומרה severity &nbsp;&nbsp; Ex = היקף extent &nbsp;&nbsp; Def. = פגם defect type</div>`;
+    // מקרא S/Ex/Def — כמו ב-Bridge Inspections.pdf, בעמוד האחרון של המקטע בלבד.
+    // <bdi> מבודד כל מילה באנגלית מהטקסט העברי שסביבה — בלי זה, אלגוריתם
+    // ה-bidi (השורה כולה RTL) עלול לערבב את סדר התצוגה של עברית/אנגלית
+    // סמוכות ולהפוך את המקרא לבלתי קריא
+    const legend = `<div class="gov-legend">S = דרגת חומרה <bdi>severity</bdi> &nbsp;&nbsp; Ex = היקף <bdi>extent</bdi> &nbsp;&nbsp; Def. = סוג פגם <bdi>defect type</bdi></div>`;
     const legendH = measureLegendHeight(legend, scratch);
     const { theadH, heights } = measureRowHeights(thead, rows, budgetInfo.contentW, scratch);
     const chunks = paginateRows(rows, heights, budgetInfo.bodyHeight - theadH);
@@ -376,13 +391,30 @@ const PdfExport = (() => {
   // ============================================================================
   // נספח: קוד/י שחזור (QR) — מקודד רק את מה שהמשתמש הזין (ר' recovery.js),
   // לא תמונות. סוקר שחוזר לגשר הזה סורק ומקבל את הטופס בחזרה במקום להתחיל
-  // מאפס. מבנה קטן ייצא קוד אחד; מבנה גדול מתפצל אוטומטית לכמה קודים.
+  // מאפס. מבנה קטן ייצא קוד אחד; מבנה גדול מתפצל אוטומטית לכמה קודים,
+  // וכולם מרוכזים יחד בעמוד אחד (ר' buildQrAppendixPages).
   // ============================================================================
-  // שני קודים לעמוד ולא ארבעה: ברשת 2×2 גובה התא הגביל את הקוד לכ-85 מ"מ
-  // (0.64 מ"מ למודול) — נסרק מהמסך אך גבולי מדף מודפס. שניים לעמוד מגדילים
-  // אותו לכ-145 מ"מ (1.06 מ"מ למודול) במחיר עמוד נוסף רק במבנים גדולים מאוד.
-  const QR_PER_PAGE = 2;
-  function buildQrAppendixPages(state) {
+  // נספחי הערות פנימיות (שינויים/מהנדס/תקשורת) — לא חלק משבעת המקטעים
+  // הרשמיים של Bridge Inspections.pdf, ולכן מודפסים כנספח בסוף הדוח, ורק
+  // אם יש בהם תוכן בפועל (לפחות הערה אחת לא ריקה) — כדי לא להוסיף עמודים
+  // ריקים לדוח כשהצוות לא משתמש בלשונית הזו כלל
+  function buildFreeNotesAppendix(sectionNum, title, notes, budgetInfo, scratch) {
+    const filled = notes.filter((n) => n.text && n.text.trim());
+    if (!filled.length) return [];
+    const rows = filled.map((n) => `<tr><td>${esc(fmtIsoDate(n.date))}</td><td>${esc(n.text)}</td></tr>`);
+    const thead = `<thead><tr><th>תאריך</th><th>הערה</th></tr></thead>`;
+    const { theadH, heights } = measureRowHeights(thead, rows, budgetInfo.contentW, scratch);
+    const chunks = paginateRows(rows, heights, budgetInfo.bodyHeight - theadH);
+    return chunks.map((chunk) =>
+      `${govSectionTitle(sectionNum, `נספח — ${title}`)}<table class="gov-table gov-notes">${thead}<tbody>${chunk.join("")}</tbody></table>`);
+  }
+
+  // כל קודי ה-QR מרוכזים בעמוד אחד (לא מפוצלים ל-2-per-page כמו קודם) —
+  // מספר העמודות ברשת מתאים את עצמו למספר הקודים בפועל, כך שסקירה רגילה
+  // (2-4 קודים) עדיין מקבלת קודים גדולים וקריאים, וגם סקירה גדולה יוצאת
+  // בעמוד אחד בלבד. כל קוד מקבל כותרת ברורה על מה שהוא נותן ("חלק N מתוך
+  // M... ללא תמונות") — לא רק "קוד שחזור N" יבש.
+  function buildQrAppendixPages(state, sectionNum) {
     let images;
     try {
       images = encodeStateToQrChunks(state).map((text) => {
@@ -396,18 +428,19 @@ const PdfExport = (() => {
       console.warn("נספח קוד השחזור דולג:", e);
       return [];
     }
-    const groups = [];
-    for (let i = 0; i < images.length; i += QR_PER_PAGE) groups.push(images.slice(i, i + QR_PER_PAGE));
-    return groups.map((group, gi) => {
-      const cells = group.map((dataUrl, j) => `
-        <div class="gov-qr-cell">
-          <div class="gov-photo-caption">קוד שחזור ${gi * QR_PER_PAGE + j + 1} מתוך ${images.length}</div>
-          <img src="${dataUrl}" class="gov-qr-img">
-        </div>`).join("");
-      return `${govSectionTitle(8, "נספח — קוד שחזור (לא כולל תמונות)")}
-        <p class="gov-qr-hint">סריקת הקודים בכלי "שחזור מ-QR" מחזירה את תוכן הדוח לטופס. יש לסרוק את כל ${images.length} הקודים. התמונות אינן נכללות ויש לצרפן מחדש.</p>
-        <div class="gov-qr-grid">${cells}</div>`;
-    });
+    if (!images.length) return [];
+    const cols = Math.min(images.length, 4);
+    const cells = images.map((dataUrl, i) => `
+      <div class="gov-qr-cell">
+        <div class="gov-qr-caption">
+          <strong>קוד שחזור ${i + 1} מתוך ${images.length}</strong>
+          <span>נתוני הסקירה (טקסט בלבד — ללא תמונות)</span>
+        </div>
+        <img src="${dataUrl}" class="gov-qr-img">
+      </div>`).join("");
+    return [`${govSectionTitle(sectionNum, "נספח — קוד שחזור (לא כולל תמונות)")}
+      <p class="gov-qr-hint">סריקת הקודים בכלי "שחזור מ-QR" מחזירה את תוכן הדוח לטופס. השחזור מלא רק לאחר סריקת כל ${images.length} הקודים יחד; התמונות אינן נכללות ויש לצרפן מחדש (למשל מקובץ ה-ZIP).</p>
+      <div class="gov-qr-grid" style="grid-template-columns: repeat(${cols}, 1fr);">${cells}</div>`];
   }
 
   // ממתין לטעינת תמונה, עם timeout הגנתי — decode()/load עלולים לא להסתיים
@@ -464,6 +497,17 @@ const PdfExport = (() => {
     const bodyHeight = PAGE_H_PX - GOV_PAD * 2 - headerH - titleH - 10;
     const budgetInfo = { bodyHeight, contentW };
 
+    // נספחי ההערות החופשיות (שינויים/מהנדס/תקשורת) מודפסים רק אם מולאו —
+    // המספור שלהם וכן של נספח ה-QR שאחריהם רץ ברצף לפי מי שבאמת מודפס,
+    // כדי לא להשאיר "חורים" במספור (למשל [8]‏ ואז [11] כי 9,10 היו ריקים)
+    let apNum = 8;
+    const changeAppendix = buildFreeNotesAppendix(apNum, "שינויים", state.changeNotes, budgetInfo, scratch);
+    if (changeAppendix.length) apNum++;
+    const engineerAppendix = buildFreeNotesAppendix(apNum, "הערות מהנדס בוחן", state.engineerNotes, budgetInfo, scratch);
+    if (engineerAppendix.length) apNum++;
+    const communicationAppendix = buildFreeNotesAppendix(apNum, "תקשורת", state.communicationNotes, budgetInfo, scratch);
+    if (communicationAppendix.length) apNum++;
+
     const pageBodies = [
       ...buildGeneralDataPage(state, result, photoStore),
       ...buildFindingsPages(state, budgetInfo, scratch),
@@ -472,7 +516,10 @@ const PdfExport = (() => {
       ...buildSurveyorNotesPage(state, result, budgetInfo, scratch),
       ...buildPhotoPages(collectPhotoItems(state, photoStore)),
       ...buildSketchPages(state, photoStore),
-      ...buildQrAppendixPages(state),
+      ...changeAppendix,
+      ...engineerAppendix,
+      ...communicationAppendix,
+      ...buildQrAppendixPages(state, apNum),
     ];
 
     const total = pageBodies.length;
@@ -510,7 +557,7 @@ const PdfExport = (() => {
   // --- ייצוא "דוח סקירה": פורמט רשמי, לרוחב, כותרת+מספור עמוד חוזרים ---
   async function exportReport() {
     if (!hasAnyComponents()) { alert("אין נתונים לייצוא — הוסף רכיבים תחילה."); return; }
-    const scratch = makeScratch();
+    const scratch = makeScratch("gov-page");
     const container = document.createElement("div");
     container.id = "gov-report";
     document.body.appendChild(container);
@@ -560,7 +607,7 @@ const PdfExport = (() => {
   // טעינה חוזרת של ה-ZIP כולו משחזרת את הכול; טעינת ה-JSON לבדו — רק טקסט ---
   async function exportZip() {
     if (!hasAnyComponents()) { alert("אין נתונים לייצוא — הוסף רכיבים תחילה."); return; }
-    const scratch = makeScratch();
+    const scratch = makeScratch("gov-page");
     const container = document.createElement("div");
     container.id = "gov-report";
     document.body.appendChild(container);
@@ -596,7 +643,7 @@ const PdfExport = (() => {
     el.innerHTML = `
       <h1>תקציר מנהלים — Condition PI</h1>
       <p class="pdf-sub">${esc(state.name || "ללא שם")}${state.number ? ` · <span dir="ltr">${esc(state.number)}</span>` : ""}
-        · הופק בתאריך ${new Date().toLocaleDateString("he-IL")}</p>
+        · הופק בתאריך ${fmtDateDMY(new Date())}</p>
       ${renderSummary(state, result, summary)}`;
     document.body.appendChild(el);
     try {
@@ -622,6 +669,45 @@ const PdfExport = (() => {
     }
   }
 
+  // --- ייצוא "חישוב ציון": מסמך נפרד, לרוחב (טבלאות רחבות) — פירוט מלא של
+  // כל הנוסחאות וההצבות לפי הנוהל, לכל רכיב/מפתח/מבנה. מרכיב מחדש בדיוק
+  // את תוכן לשונית "בקרה" (renderControlAudit) עם forPdf=true, כך שאין
+  // כפילות לוגיקה בין המסך החי לבין הקובץ המיוצא ---
+  async function exportCalculation() {
+    if (!hasAnyComponents()) { alert("אין נתונים לייצוא — הוסף רכיבים תחילה."); return; }
+    const input = buildEngineInput();
+    const result = Calc.computeStructure(input);
+    const el = document.createElement("div");
+    el.id = "pdf-calc";
+    el.innerHTML = `
+      <h1>חישוב הציון — פירוט מלא לפי הנוהל</h1>
+      <p class="pdf-sub">${esc(state.name || "ללא שם")}${state.number ? ` · <span dir="ltr">${esc(state.number)}</span>` : ""}
+        · הופק בתאריך ${fmtDateDMY(new Date())}</p>
+      ${renderControlAudit(state, result, true)}`;
+    document.body.appendChild(el);
+    try {
+      await decodeImages(el);
+      fitImages(el);
+      const canvas = await html2canvas(el, { scale: SCALE, backgroundColor: "#ffffff" });
+      const pdf = new jspdf.jsPDF("l", "mm", "a4");
+      const pageHc = PAGE_H_PX * SCALE;
+      const pages = Math.max(1, Math.ceil(canvas.height / pageHc));
+      for (let p = 0; p < pages; p++) {
+        const sliceH = Math.min(pageHc, canvas.height - p * pageHc);
+        const slice = document.createElement("canvas");
+        slice.width = canvas.width; slice.height = pageHc;
+        const ctx = slice.getContext("2d");
+        ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, slice.width, slice.height);
+        ctx.drawImage(canvas, 0, p * pageHc, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+        if (p) pdf.addPage();
+        pdf.addImage(slice.toDataURL("image/jpeg", JPEG_QUALITY), "JPEG", 0, 0, PAGE_W_MM, PAGE_H_MM);
+      }
+      pdf.save(`חישוב ציון - ${state.name || state.number || "ללא שם"}.pdf`);
+    } finally {
+      el.remove();
+    }
+  }
+
   // --- ת.ז: כותרת פשוטה (עמוד N מתוך M + כותרת הטופס), A4 לאורך ---
   function idCardHeaderHTML(pageNum, totalPages) {
     return `<div class="idcard-head">
@@ -641,7 +727,7 @@ const PdfExport = (() => {
   // --- ייצוא "ת.ז": תעודת זהות לגשר ומובל, A4 לאורך, לפי Bridge ID Cards.pdf —
   // שימוש חוזר מלא במנגנון המדידה/פיצול/עמוד-לעמוד שנבנה עבור "דוח סקירה" ---
   async function exportIdCard() {
-    const scratch = makeScratch();
+    const scratch = makeScratch("idcard-page");
     const container = document.createElement("div");
     container.id = "gov-report";
     document.body.appendChild(container);
@@ -731,5 +817,5 @@ const PdfExport = (() => {
     }
   }
 
-  return { exportReport, exportSummary, exportIdCard, exportZip };
+  return { exportReport, exportSummary, exportCalculation, exportIdCard, exportZip };
 })();

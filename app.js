@@ -354,6 +354,7 @@ function defaultState() {
     inspClass: "", inspDate: todayISO(), prevInspDate: "",
     surveyorName: "", companyName: "",
     client: "", surveyType: "שגרתית", designer: "", coordX: "", coordY: "", roadNumber: "",
+    clientLogoDataUrl: null,
     immediateAttention: { text: "", photo: "" },
     findingPhotos: requiredFindingsFor("BRG"), sketches: [], drawingsFile: "",
     changeNotes: [], surveyorNotes: [], engineerNotes: [], communicationNotes: [],
@@ -689,6 +690,10 @@ function update() {
   document.getElementById("drawings-file-status").innerHTML = drawingsFileAttached
     ? '<span class="photo-chip ok">✔ קובץ הועלה</span>'
     : '<span class="photo-chip missing">לא הועלה קובץ עדיין</span>';
+  document.getElementById("client-logo-status").innerHTML = state.clientLogoDataUrl
+    ? '<span class="photo-chip ok">✔ לוגו הועלה</span>'
+    : "לא נבחר לוגו — בדוח תודפס רק פינת הלוגו שלנו";
+  document.getElementById("btn-client-logo-remove").hidden = !state.clientLogoDataUrl;
   document.getElementById("ia-text").value = state.immediateAttention.text;
   document.getElementById("ia-photo").value = state.immediateAttention.photo;
   document.getElementById("ia-photo-status").innerHTML =
@@ -847,6 +852,23 @@ function init() {
     drawingsFileAttached = true;
     drawingsFileBlob = file;   // נשמר בזיכרון כדי לצרף בפועל ל-ZIP בייצוא
     e.target.value = "";
+    scheduleUpdate();
+  });
+  // לוגו מזמין העבודה — נשמר כ-data URL בתוך state עצמו (לא כמו קובץ
+  // התרשימים) כי הוא צריך להיות זמין ישירות לתגית <img> בייצוא ה-PDF,
+  // ומשום שהוא קטן מספיק לא להכביד על localStorage/ZIP/קובץ הטעינה
+  document.getElementById("btn-client-logo").addEventListener("click", () => document.getElementById("client-logo-input").click());
+  document.getElementById("client-logo-input").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { alert("קובץ הלוגו גדול מדי (מעל 2MB) — נא לבחור קובץ קטן יותר."); return; }
+    const reader = new FileReader();
+    reader.onload = () => { state.clientLogoDataUrl = reader.result; scheduleUpdate(); };
+    reader.readAsDataURL(file);
+  });
+  document.getElementById("btn-client-logo-remove").addEventListener("click", () => {
+    state.clientLogoDataUrl = null;
     scheduleUpdate();
   });
   // "תשומת לב מיידית" — שדות סטטיים, לכן שמירה ישירה בלי רינדור מלא (הסמן
@@ -1234,6 +1256,8 @@ function init() {
     runExport("btn-pdf-summary", "ייצוא התקציר", () => PdfExport.exportSummary()));
   document.getElementById("btn-pdf-idcard").addEventListener("click", () =>
     runExport("btn-pdf-idcard", "ייצוא תעודת הזהות", () => PdfExport.exportIdCard()));
+  document.getElementById("btn-pdf-calc").addEventListener("click", () =>
+    runExport("btn-pdf-calc", "ייצוא חישוב הציון", () => PdfExport.exportCalculation()));
   document.getElementById("btn-pdf-zip").addEventListener("click", () =>
     runExport("btn-pdf-zip", "ייצוא ה-ZIP", () => PdfExport.exportZip()));
   document.getElementById("btn-print").addEventListener("click", () => window.print());

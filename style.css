@@ -11,6 +11,27 @@
 #qr-video { width: 100%; border-radius: 6px; background: #000; max-height: 320px; object-fit: cover; display: block; }
 /* label { display:flex } דורס את ברירת המחדל של הדפדפן ל-[hidden] — חובה לאכוף */
 [hidden] { display: none !important; }
+
+/* מסך נעילה — מעל הכל, כולל סרגל הכלים הדביק (z-index:20) */
+.access-gate {
+  position: fixed; inset: 0; background: var(--bg, #f6f8fa);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
+  direction: rtl; font-family: "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif;
+}
+.access-gate-box {
+  background: #fff; border: 1px solid var(--border, #d0d7de); border-radius: 12px;
+  padding: 32px 28px; max-width: 340px; width: 92%; text-align: center;
+  box-shadow: 0 4px 18px rgba(0,0,0,.08);
+}
+.access-gate-logo { width: 64px; height: 64px; object-fit: contain; margin-bottom: 10px; }
+.access-gate-box h2 { margin: 0 0 6px; font-size: 1.15rem; }
+.access-gate-box p { margin: 0 0 16px; color: #57606a; font-size: .88rem; }
+.access-gate-box form { display: flex; flex-direction: column; gap: 10px; }
+.access-gate-box input {
+  text-align: center; letter-spacing: 3px; font-size: 1.1rem;
+  padding: 10px; border: 1px solid var(--border, #d0d7de); border-radius: 8px;
+}
+.access-gate-error { color: var(--danger, #c1121f); font-size: .85rem; margin: 12px 0 0; }
 :root {
   --primary: #0b5394; --primary-light: #e8f0fa;
   --border: #d0d7de; --bg: #f6f8fa; --text: #1f2328;
@@ -312,6 +333,9 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 .summary-block th, .summary-block td { border: 1px solid var(--border); padding: 5px 9px; text-align: right; }
 .summary-block th { background: var(--bg); }
 .summary-name { font-size: 1.15rem; font-weight: 800; margin: 4px 0; }
+.defect-narrative { margin: 6px 0 0; }
+.defect-narrative p { line-height: 1.6; margin: 0 0 8px; text-align: justify; }
+.defect-note-quote { font-style: italic; color: #444; border-inline-start: 3px solid var(--border); padding-inline-start: 8px; }
 
 /* מדי מהירות — טבלה 15 */
 .gauges { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; }
@@ -336,6 +360,17 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
 #pdf-summary h1 { font-size: 1.4rem; color: var(--primary); margin: 0 0 4px; }
 #pdf-summary .pdf-sub { margin: 0 0 14px; color: #57606a; font-size: .9rem; }
 
+/* ייצוא "חישוב ציון" PDF — קונטיינר מחוץ למסך ברוחב A4 לרוחב (טבלאות
+   הבקרה רחבות, 9 עמודות — צריכות יותר רוחב מהתקציר) */
+#pdf-calc {
+  position: absolute; top: 0; left: -20000px; width: 1122px;
+  background: #fff; padding: 24px 32px; direction: rtl;
+  font-family: "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif; color: var(--text);
+}
+#pdf-calc h1 { font-size: 1.4rem; color: var(--primary); margin: 0 0 4px; }
+#pdf-calc .pdf-sub { margin: 0 0 14px; color: #57606a; font-size: .9rem; }
+#pdf-calc h3 { color: var(--primary); font-size: 1rem; margin: 18px 0 6px; }
+
 /* דוח סקירה PDF — פורמט רשמי, A4 לרוחב, עמוד = div נפרד (לא קנבס ארוך שנחתך),
    כך שכותרת המבנה ומספור העמוד חוזרים אמיתית על כל עמוד. */
 #gov-report { position: absolute; top: 0; left: -20000px; }
@@ -349,7 +384,11 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
   font-size: 13.3px; display: flex; flex-direction: column;
 }
 /* "דו"ח סקירה" — כותרת עליונה שמופיעה רק בעמוד הראשון, מעל הטבלה החוזרת */
-.gov-report-title { font-weight: 700; text-align: center; margin-bottom: 4px; flex: 0 0 auto; }
+.gov-report-title { font-weight: 700; text-align: center; }
+.gov-title-row { display: flex; align-items: center; margin-bottom: 4px; flex: 0 0 auto; }
+.gov-title-row .gov-report-title { flex: 1 1 auto; min-width: 0; }
+.gov-logo-box { flex: 0 0 90px; width: 90px; height: 40px; display: flex; align-items: center; justify-content: center; }
+.gov-logo-box img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
 
 .gov-head { width: 100%; border-collapse: collapse; margin-bottom: 6px; flex: 0 0 auto; }
 .gov-head td { border: 1px solid #000; padding: 3px 6px; }
@@ -408,11 +447,18 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
 .gov-attention-text { font-size: 11px; white-space: pre-wrap; }
 .gov-attention-codes { font-size: 10px; margin-top: 4px; }
 
-/* נספח קודי השחזור — שני קודים לעמוד, גדולים ככל שהעמוד מרשה.
-   image-rendering:pixelated שומר על קצוות מודול חדים בהגדלה, מה שמשפר
-   משמעותית את אמינות הסריקה מדף מודפס. */
-.gov-qr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: 1 1 auto; min-height: 0; }
-.gov-qr-cell { display: flex; flex-direction: column; min-height: 0; }
+/* נספח קודי השחזור — כל הקודים בעמוד אחד; מספר העמודות ברשת נקבע דינמית
+   לפי כמות הקודים בפועל (ר' buildQrAppendixPages), כדי שהם יישארו גדולים
+   ככל שהעמוד מרשה. image-rendering:pixelated שומר על קצוות מודול חדים
+   בהגדלה, מה שמשפר משמעותית את אמינות הסריקה מדף מודפס. */
+.gov-qr-grid { display: grid; gap: 14px; flex: 1 1 auto; min-height: 0; }
+.gov-qr-cell {
+  display: flex; flex-direction: column; min-height: 0;
+  border: 1px solid #999; border-radius: 4px; padding: 8px; background: #fafafa;
+}
+.gov-qr-caption { text-align: center; flex: 0 0 auto; margin-bottom: 6px; }
+.gov-qr-caption strong { display: block; font-size: 11px; }
+.gov-qr-caption span { display: block; font-size: 9.5px; color: #57606a; margin-top: 1px; }
 .gov-qr-img { flex: 1 1 auto; min-height: 0; width: 100%; object-fit: contain; image-rendering: pixelated; }
 .gov-qr-hint { font-size: 10px; margin: 0 0 6px; flex: 0 0 auto; }
 

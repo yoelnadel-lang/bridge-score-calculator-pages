@@ -9,6 +9,55 @@
 </head>
 <body>
 
+<!-- מסך נעילה — לא הגנה אמיתית (הקוד/ה-hash גלויים בקוד המקור לכל מי
+     שיפתח "הצג מקור"), אלא עוצר גולש מזדמן/רובוט חיפוש בלבד. הקוד נבדק
+     מול SHA-256 כדי שלפחות הספרות עצמן לא יופיעו כטקסט גלוי בקובץ.
+     נטען לפני שאר האפליקציה וחוסם ויזואלית עד להזנת קוד נכון; לאחר מכן
+     נזכר בדפדפן (localStorage) כדי לא לבקש שוב בכל ביקור. -->
+<div id="access-gate" class="access-gate">
+  <div class="access-gate-box">
+    <img src="logo.jpeg" alt="" class="access-gate-logo">
+    <h2>גישה מוגבלת</h2>
+    <p>המערכת פתוחה למורשי גישה בלבד. נא להזין קוד גישה.</p>
+    <form id="access-gate-form" autocomplete="off">
+      <input type="password" inputmode="numeric" id="access-gate-input" maxlength="12"
+        placeholder="קוד גישה" autocomplete="off" dir="ltr">
+      <button type="submit" class="btn btn-primary">כניסה</button>
+    </form>
+    <p id="access-gate-error" class="access-gate-error" hidden>קוד שגוי — נסו שוב.</p>
+  </div>
+</div>
+<script>
+(function () {
+  var KEY = "access-gate-unlocked-v1";
+  var CODE_HASH = "e45093a9403e5d9f2af14ea19d613108b8c8e2d084b30ee740ea8015ddb0da97"; // SHA-256
+  var gate = document.getElementById("access-gate");
+  if (localStorage.getItem(KEY) === "1") {
+    gate.hidden = true;
+    return;
+  }
+  async function sha256Hex(text) {
+    var data = new TextEncoder().encode(text);
+    var digest = await crypto.subtle.digest("SHA-256", data);
+    return [...new Uint8Array(digest)].map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+  }
+  document.getElementById("access-gate-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var input = document.getElementById("access-gate-input");
+    var errorEl = document.getElementById("access-gate-error");
+    var hash = await sha256Hex(input.value.trim());
+    if (hash === CODE_HASH) {
+      localStorage.setItem(KEY, "1");
+      gate.hidden = true;
+    } else {
+      errorEl.hidden = false;
+      input.value = "";
+      input.focus();
+    }
+  });
+})();
+</script>
+
 <!-- שלושת הפסים בקונטיינר סטיקי אחד — כך הם לא מתחבאים זה מתחת לזה
      כשסרגל הכלים נשבר לכמה שורות ברוחב צר (היסטים קבועים היו שבירים) -->
 <div class="app-chrome no-print">
@@ -24,6 +73,7 @@
       <button id="btn-pdf-report" class="btn">📄 ייצוא דוח סקירה</button>
       <button id="btn-pdf-summary" class="btn">📊 ייצוא תקציר מנהלים</button>
       <button id="btn-pdf-idcard" class="btn">🪪 ייצוא ת.ז</button>
+      <button id="btn-pdf-calc" class="btn" title="פירוט מלא של כל הנוסחאות וההצבות שקבעו את הציון, כמו בלשונית 'בקרה'">🧮 ייצוא חישוב ציון</button>
       <button id="btn-pdf-zip" class="btn" title="קובץ ZIP אחד עם דוח הסקירה (PDF) וקובץ טעינה (JSON) — להעברה, שיתוף או גיבוי">📦 ייצוא סקירה (ZIP)</button>
       <button id="btn-scan-qr" class="btn" title="שחזור נתונים מקוד QR שהודפס בדוח קודם — לא כולל תמונות">📷 שחזור מ-QR</button>
       <button id="btn-print" class="btn">🖨️ הדפסת דוח</button>
@@ -95,6 +145,14 @@
         </label>
         <label>שם המזמין
           <input type="text" id="st-client" placeholder="עירית ירושלים">
+        </label>
+        <label>לוגו מזמין העבודה (יודפס בפינת עמוד 1 בדוח)
+          <span class="add-row" style="margin:0">
+            <button type="button" class="btn btn-sm" id="btn-client-logo">📎 בחר קובץ לוגו</button>
+            <button type="button" class="btn btn-sm btn-danger" id="btn-client-logo-remove" hidden>✕ הסר</button>
+          </span>
+          <input type="file" id="client-logo-input" accept="image/*" hidden>
+          <span class="hint" id="client-logo-status">לא נבחר לוגו — בדוח תודפס רק פינת הלוגו שלנו</span>
         </label>
         <label>סוג הסקירה
           <input type="text" id="st-survey-type">
@@ -437,6 +495,7 @@
 
 <script src="data.js"></script>
 <script src="defects.js"></script>
+<script src="defect_guidance.js"></script>
 <script src="example_br11.js"></script>
 <script src="calc.js"></script>
 <script src="combobox.js"></script>
