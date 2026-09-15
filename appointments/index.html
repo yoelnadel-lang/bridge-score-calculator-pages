@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>קביעת תור</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1 id="page-title">קביעת תור</h1>
+  <p class="subtitle" id="page-subtitle"></p>
+
+  <div class="notice">
+    שימו לב: הטופס שולח <strong>בקשת</strong> תור בלבד. הזמינות המוצגת כאן מבוססת על שעות
+    הפעילות ואינה בזמן אמת — התור יאושר סופית מולכם בוואטסאפ.
+  </div>
+
+  <div class="card" id="booking-card">
+    <div class="field">
+      <label for="service">סוג פגישה</label>
+      <select id="service"></select>
+    </div>
+
+    <div class="field">
+      <label for="date">תאריך</label>
+      <input type="date" id="date">
+    </div>
+
+    <div class="field">
+      <label>שעה</label>
+      <div id="slots" class="slots-grid"></div>
+      <p id="no-slots" class="empty-note" hidden>אין שעות פנויות בתאריך זה. נסו תאריך אחר.</p>
+    </div>
+
+    <div class="field">
+      <label for="name">שם מלא</label>
+      <input type="text" id="name" autocomplete="name" placeholder="השם שלך">
+    </div>
+
+    <div class="field">
+      <label for="phone">טלפון</label>
+      <input type="tel" id="phone" autocomplete="tel" placeholder="050-1234567">
+    </div>
+
+    <div class="field">
+      <label for="note">הערה (לא חובה)</label>
+      <textarea id="note" placeholder="פרטים נוספים לתור..."></textarea>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" id="submit-btn">שליחת בקשת תור בוואטסאפ</button>
+    </div>
+    <p id="form-error" class="access-gate-error" hidden></p>
+  </div>
+
+  <div class="card" id="confirm-card" hidden>
+    <h2>הבקשה מוכנה לשליחה ✅</h2>
+    <p id="confirm-summary"></p>
+    <div class="btn-row">
+      <button class="btn secondary" id="ics-btn">הוספת התזכורת ליומן שלי</button>
+      <button class="btn secondary" id="new-request-btn">בקשת תור נוספת</button>
+    </div>
+  </div>
+
+  <div class="footer-link"><a href="admin.html">אזור ניהול</a></div>
+</main>
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -10,6 +10,8 @@
 
 **האתר החי:** https://yoelnadel-lang.github.io/bridge-score-calculator-pages/
 
+**אפליקציית זימון תורים** (פרויקט נוסף באותו אתר): https://yoelnadel-lang.github.io/bridge-score-calculator-pages/appointments/ — פרטים ב-[`appointments/README.md`](./appointments/README.md).
+
 ## מה המחשבון עושה
 
 1. הזנת רכיבי המבנה לפי קטלוגי הרכיבים הרשמיים (חשיבות ויחידות אוטומטיות),

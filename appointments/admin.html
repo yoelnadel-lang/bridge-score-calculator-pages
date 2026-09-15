@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ניהול תורים</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="access-gate" id="gate">
+  <div class="access-gate-box">
+    <h2>אזור ניהול</h2>
+    <p>הזינו את קוד הגישה כדי להמשיך</p>
+    <form id="gate-form">
+      <input type="password" id="gate-pin" inputmode="numeric" placeholder="קוד גישה" autofocus>
+      <button type="submit" class="btn">כניסה</button>
+    </form>
+    <p class="access-gate-error" id="gate-error" hidden>קוד שגוי, נסו שוב</p>
+  </div>
+</div>
+
+<main id="admin-main" hidden>
+  <h1>ניהול תורים — <span id="business-name"></span></h1>
+  <p class="subtitle">הרשימה נשמרת בדפדפן הזה בלבד. יש להשתמש תמיד באותו מכשיר/דפדפן לניהול התורים.</p>
+
+  <div class="card">
+    <h2 style="margin-top:0">הוספת תור</h2>
+    <div class="field">
+      <label for="a-service">סוג פגישה</label>
+      <select id="a-service"></select>
+    </div>
+    <div class="field">
+      <label for="a-date">תאריך</label>
+      <input type="date" id="a-date">
+    </div>
+    <div class="field">
+      <label>שעה</label>
+      <div id="a-slots" class="slots-grid"></div>
+      <p id="a-no-slots" class="empty-note" hidden>אין שעות פנויות בתאריך זה לפי שעות הפעילות והתורים הקיימים.</p>
+    </div>
+    <div class="field">
+      <label for="a-name">שם הלקוח/ה</label>
+      <input type="text" id="a-name">
+    </div>
+    <div class="field">
+      <label for="a-phone">טלפון</label>
+      <input type="tel" id="a-phone" placeholder="050-1234567">
+    </div>
+    <div class="field">
+      <label for="a-note">הערה (לא חובה)</label>
+      <textarea id="a-note"></textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="a-add-btn">הוספת תור</button>
+    </div>
+    <p id="a-error" class="access-gate-error" hidden></p>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+      <h2 style="margin:0">התורים שלי</h2>
+      <div class="btn-row">
+        <button class="btn small secondary" id="export-btn">גיבוי (JSON)</button>
+        <label class="btn small secondary" style="cursor:pointer;">
+          שחזור מגיבוי
+          <input type="file" id="import-file" accept="application/json" hidden>
+        </label>
+      </div>
+    </div>
+    <div class="field" style="margin-top:14px;">
+      <label for="filter-select">הצגה</label>
+      <select id="filter-select">
+        <option value="upcoming">תורים קרובים</option>
+        <option value="all">כל התורים</option>
+        <option value="cancelled">מבוטלים</option>
+      </select>
+    </div>
+    <div id="appt-list"></div>
+    <p id="empty-list" class="empty-note" hidden>אין תורים להצגה.</p>
+  </div>
+
+  <div class="footer-link"><a href="index.html">חזרה לדף קביעת התור</a></div>
+</main>
+
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

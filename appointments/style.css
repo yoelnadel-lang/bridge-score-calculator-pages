@@ -1,0 +1,90 @@
+* { box-sizing: border-box; }
+:root {
+  --primary: #0b5394; --primary-light: #e8f0fa;
+  --border: #d0d7de; --bg: #f6f8fa; --text: #1f2328;
+  --danger: #c1121f; --ok: #1a7f37; --muted: #57606a;
+}
+body {
+  font-family: "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif;
+  margin: 0; background: var(--bg); color: var(--text);
+  direction: rtl; line-height: 1.55;
+}
+main { max-width: 640px; margin: 0 auto; padding: 16px 14px 40px; }
+h1 { font-size: 1.4rem; margin: 4px 0 2px; }
+.subtitle { color: var(--muted); margin: 0 0 18px; font-size: .92rem; }
+
+.card {
+  background: #fff; border: 1px solid var(--border); border-radius: 12px;
+  padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.04);
+}
+.field { margin-bottom: 14px; }
+.field label { display: block; font-weight: 600; margin-bottom: 6px; font-size: .92rem; }
+.field input, .field select, .field textarea {
+  width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 1rem; font-family: inherit; background: #fff; color: var(--text);
+}
+.field textarea { resize: vertical; min-height: 60px; }
+.hint { color: var(--muted); font-size: .82rem; margin-top: 4px; }
+
+.slots-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.slot-btn {
+  padding: 8px 14px; border: 1px solid var(--primary); border-radius: 8px;
+  background: #fff; color: var(--primary); cursor: pointer; font-size: .95rem;
+}
+.slot-btn:hover { background: var(--primary-light); }
+.slot-btn.selected { background: var(--primary); color: #fff; }
+.empty-note { color: var(--muted); font-size: .9rem; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 11px 20px; border-radius: 8px; border: 1px solid var(--primary);
+  background: var(--primary); color: #fff; font-size: 1rem; cursor: pointer;
+  text-decoration: none; font-family: inherit;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.secondary { background: #fff; color: var(--primary); }
+.btn.danger { background: #fff; color: var(--danger); border-color: var(--danger); }
+.btn.small { padding: 6px 12px; font-size: .85rem; }
+.btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.notice {
+  background: var(--primary-light); border: 1px solid var(--primary); border-radius: 8px;
+  padding: 10px 12px; font-size: .87rem; margin-bottom: 16px; color: var(--text);
+}
+
+.appt-item {
+  border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px;
+}
+.appt-item-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.appt-date { font-weight: 700; }
+.appt-time { color: var(--primary); font-weight: 700; }
+.badge {
+  display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: .78rem; font-weight: 600;
+}
+.badge.confirmed { background: #e6f4ea; color: var(--ok); }
+.badge.cancelled { background: #fdecec; color: var(--danger); }
+.appt-meta { color: var(--muted); font-size: .88rem; margin-top: 4px; }
+.appt-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+.access-gate {
+  position: fixed; inset: 0; background: var(--bg);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
+}
+.access-gate-box {
+  background: #fff; border: 1px solid var(--border); border-radius: 12px;
+  padding: 32px 28px; max-width: 320px; width: 92%; text-align: center;
+  box-shadow: 0 4px 18px rgba(0,0,0,.08);
+}
+.access-gate-box h2 { margin: 0 0 6px; font-size: 1.15rem; }
+.access-gate-box p { margin: 0 0 16px; color: var(--muted); font-size: .88rem; }
+.access-gate-box form { display: flex; flex-direction: column; gap: 10px; }
+.access-gate-box input {
+  text-align: center; letter-spacing: 3px; font-size: 1.1rem;
+  padding: 10px; border: 1px solid var(--border); border-radius: 8px;
+}
+.access-gate-error { color: var(--danger); font-size: .85rem; margin: 12px 0 0; }
+
+.footer-link { text-align: center; margin-top: 24px; }
+.footer-link a { color: var(--muted); font-size: .85rem; }
+
+[hidden] { display: none !important; }
