@@ -89,6 +89,12 @@ main { max-width: 1200px; margin: 0 auto; padding: 0 14px 40px; }
 .btn-primary:hover { background: #094780; }
 .btn-danger { color: var(--danger); }
 .btn-sm { padding: 3px 9px; font-size: .8rem; }
+.toolbar-checkbox {
+  display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+  background: #fff; border: 1px solid var(--border); border-radius: 4px;
+  padding: 6px 12px; font-size: .85rem; color: var(--text); font-weight: 600;
+}
+.toolbar-checkbox:has(input:checked) { background: #fff3e0; border-color: #e2711d; color: #9a4b00; }
 
 /* --- פאנלים בסגנון BMS: מסגרת חדה, כותרת אפורה, קיפול אמיתי (details/summary) --- */
 .panel {
@@ -379,9 +385,17 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
    הדגשה/רקע אפור על תוויות שבמסמך המקור מוצגות כטקסט רגיל לבן */
 .gov-page {
   width: 1122px; height: 794px; background: #fff; overflow: hidden;
-  padding: 14px; box-sizing: border-box; direction: rtl;
+  padding: 14px; box-sizing: border-box; direction: rtl; position: relative;
   font-family: Arial, "Segoe UI", "Noto Sans Hebrew", sans-serif; color: #000;
   font-size: 13.3px; display: flex; flex-direction: column;
+}
+/* סימן מים "טיוטה להגשה" — נוסף (רק כשמסומן) לפני צילום כל עמוד ל-html2canvas,
+   כדי שהטקסט העברי יירונדר כרגיל ע"י הדפדפן (טקסט וקטורי ב-jsPDF לא תומך
+   בעברית בגופנים המובנים). עדין ושקוף כדי לא להפריע לקריאת התוכן שמתחתיו. */
+.gov-watermark {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-35deg);
+  font-size: 92px; font-weight: 700; color: rgba(180, 0, 0, .13);
+  white-space: nowrap; pointer-events: none; user-select: none; z-index: 5;
 }
 /* "דו"ח סקירה" — כותרת עליונה שמופיעה רק בעמוד הראשון, מעל הטבלה החוזרת */
 .gov-report-title { font-weight: 700; text-align: center; }

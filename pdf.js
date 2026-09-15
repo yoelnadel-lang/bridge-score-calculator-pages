@@ -283,24 +283,21 @@ const PdfExport = (() => {
   }
 
   // ============================================================================
-  // מקטע 5: הערות הסוקר — פרשנות אוטומטית של CPI Av/Crit לפי טבלה 15, ולאחריה
-  // ההערות החופשיות שהסוקר הזין בפועל בלשונית "הערות הסוקר" (state.surveyorNotes).
-  // עד כה הן נשמרו בנתונים (ZIP/QR) אבל לא הופקו בדוח כלל — למרות שהמקטע כאן
-  // נקרא באותו שם בדיוק, מה שיצר רושם מטעה שהן "כן" מודפסות איפשהו.
-  // (התקציר האינטראקטיבי עצמו — מדי המהירות — עבר למסמך נפרד, ר' exportSummary)
+  // מקטע 5: הערות הסוקר — אך ורק ההערות החופשיות שהוזנו בפועל בלשונית
+  // "הערות הסוקר" (state.surveyorNotes). בעבר המקטע כלל גם פרשנות אוטומטית
+  // של ציוני CPI Av/Crit וסייג אחריות קבוע — לפי בקשה מפורשת, אין יותר שום
+  // תוכן אוטומטי/ברירת מחדל כאן: אם לא הוזנו הערות, מוצגת שורת "לא הוזנו
+  // הערות" בלבד, בדיוק כמו "לא נרשמו פגמים" במקטע 3.
   // ============================================================================
-  function buildSurveyorNotesPage(state, result, budgetInfo, scratch) {
-    const av = Calc.meaning(result.bridge.method_norm.cpiAv, MEANING_AV);
-    const crit = Calc.meaning(result.bridge.cpiCrit, MEANING_CRIT);
-    const items = [];
-    if (av) items.push(`ציון CPI Average = ${fmt(result.bridge.method_norm.cpiAv)} מגדיר את מצבו הכללי של המבנה כ"${esc(av.name)}". ${esc(av.text)}`);
-    if (crit) items.push(`ציון CPI Critical = ${fmt(result.bridge.cpiCrit)} מגדיר את מצבו הכללי של המבנה כ"${esc(crit.name)}". ${esc(crit.text)}`);
-    items.push("הכלי הוא עזר חישובי בלבד; האחריות המקצועית על הסוקר והמהנדס.");
-    for (const n of state.surveyorNotes) {
-      if (n.text && n.text.trim()) items.push(esc(n.text));
+  function buildSurveyorNotesPage(state, budgetInfo, scratch) {
+    const items = state.surveyorNotes
+      .filter((n) => n.text && n.text.trim())
+      .map((n) => esc(n.text));
+    const thead = `<thead><tr><th>מספר</th><th>תיאור</th></tr></thead>`;
+    if (!items.length) {
+      return [`${govSectionTitle(5, "הערות הסוקר")}<table class="gov-table">${thead}<tbody><tr><td colspan="2" class="gov-empty">לא הוזנו הערות סוקר</td></tr></tbody></table>`];
     }
     const rows = items.map((t, i) => `<tr><td>${i + 1}</td><td>${t}</td></tr>`);
-    const thead = `<thead><tr><th>מספר</th><th>תיאור</th></tr></thead>`;
     const { theadH, heights } = measureRowHeights(thead, rows, budgetInfo.contentW, scratch);
     const chunks = paginateRows(rows, heights, budgetInfo.bodyHeight - theadH);
     return chunks.map((chunk) =>
@@ -480,8 +477,10 @@ const PdfExport = (() => {
   }
 
   // בונה את מופע ה-jsPDF של "דוח סקירה" בלי לשמור אותו — קרוא גם מ-exportReport
-  // (הורדה ישירה) וגם מ-exportZip (חבילת ZIP עם קובץ הטעינה)
-  async function buildReportPdf(scratch, container) {
+  // (הורדה ישירה) וגם מ-exportZip (חבילת ZIP עם קובץ הטעינה).
+  // watermark=true: מוסיף "טיוטה להגשה" באלכסון לכל עמוד — משפיע רק על
+  // הקובץ המיוצא, לא על state/נתוני הסקירה (ר' checkbox בסרגל הכלים)
+  async function buildReportPdf(scratch, container, watermark) {
     const input = buildEngineInput();
     const result = Calc.computeStructure(input);
 
@@ -513,7 +512,7 @@ const PdfExport = (() => {
       ...buildFindingsPages(state, budgetInfo, scratch),
       ...buildComponentReviewPages(state, budgetInfo, scratch),
       ...buildQuantitySummaryPages(state, budgetInfo, scratch, result),
-      ...buildSurveyorNotesPage(state, result, budgetInfo, scratch),
+      ...buildSurveyorNotesPage(state, budgetInfo, scratch),
       ...buildPhotoPages(collectPhotoItems(state, photoStore)),
       ...buildSketchPages(state, photoStore),
       ...changeAppendix,
@@ -529,7 +528,8 @@ const PdfExport = (() => {
       const isNative = typeof spec === "object" && spec.nativeImage;
       const pageEl = document.createElement("div");
       pageEl.className = "gov-page";
-      pageEl.innerHTML = govHeaderHTML(state, i + 1, total) + (isNative ? spec.html : spec);
+      pageEl.innerHTML = govHeaderHTML(state, i + 1, total) + (isNative ? spec.html : spec)
+        + (watermark ? '<div class="gov-watermark">טיוטה להגשה</div>' : "");
       container.appendChild(pageEl);
       await decodeImages(pageEl);
       fitImages(pageEl);
@@ -555,15 +555,15 @@ const PdfExport = (() => {
   }
 
   // --- ייצוא "דוח סקירה": פורמט רשמי, לרוחב, כותרת+מספור עמוד חוזרים ---
-  async function exportReport() {
+  async function exportReport(watermark) {
     if (!hasAnyComponents()) { alert("אין נתונים לייצוא — הוסף רכיבים תחילה."); return; }
     const scratch = makeScratch("gov-page");
     const container = document.createElement("div");
     container.id = "gov-report";
     document.body.appendChild(container);
     try {
-      const pdf = await buildReportPdf(scratch, container);
-      pdf.save(`דוח סקירה - ${state.name || state.number || "ללא שם"}.pdf`);
+      const pdf = await buildReportPdf(scratch, container, watermark);
+      pdf.save(`${watermark ? "טיוטה - " : ""}דוח סקירה - ${state.name || state.number || "ללא שם"}.pdf`);
     } finally {
       scratch.remove();
       container.remove();
@@ -605,7 +605,7 @@ const PdfExport = (() => {
   // --- ייצוא חבילת ZIP: דוח הסקירה (PDF) + קובץ טעינה (JSON, כל מה שהוזן —
   // בלי תמונות, כמו ה-state עצמו) + תיקיית התמונות + קובץ התרשימים אם צורף.
   // טעינה חוזרת של ה-ZIP כולו משחזרת את הכול; טעינת ה-JSON לבדו — רק טקסט ---
-  async function exportZip() {
+  async function exportZip(watermark) {
     if (!hasAnyComponents()) { alert("אין נתונים לייצוא — הוסף רכיבים תחילה."); return; }
     const scratch = makeScratch("gov-page");
     const container = document.createElement("div");
@@ -613,9 +613,9 @@ const PdfExport = (() => {
     document.body.appendChild(container);
     const baseName = state.name || state.number || "ללא שם";
     try {
-      const pdf = await buildReportPdf(scratch, container);
+      const pdf = await buildReportPdf(scratch, container, watermark);
       const zip = new JSZip();
-      zip.file(`דוח סקירה - ${baseName}.pdf`, pdf.output("blob"));
+      zip.file(`${watermark ? "טיוטה - " : ""}דוח סקירה - ${baseName}.pdf`, pdf.output("blob"));
       zip.file(`קובץ טעינה - ${baseName}.json`, JSON.stringify(state, null, 2));
       addPhotosToZip(zip);
       addDrawingsFileToZip(zip);

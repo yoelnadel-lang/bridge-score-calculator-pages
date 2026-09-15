@@ -1251,7 +1251,7 @@ function init() {
     finally { btn.disabled = false; btn.textContent = orig; }
   }
   document.getElementById("btn-pdf-report").addEventListener("click", () =>
-    runExport("btn-pdf-report", "ייצוא הדוח", () => PdfExport.exportReport()));
+    runExport("btn-pdf-report", "ייצוא הדוח", () => PdfExport.exportReport(document.getElementById("draft-watermark").checked)));
   document.getElementById("btn-pdf-summary").addEventListener("click", () =>
     runExport("btn-pdf-summary", "ייצוא התקציר", () => PdfExport.exportSummary()));
   document.getElementById("btn-pdf-idcard").addEventListener("click", () =>
@@ -1259,7 +1259,7 @@ function init() {
   document.getElementById("btn-pdf-calc").addEventListener("click", () =>
     runExport("btn-pdf-calc", "ייצוא חישוב הציון", () => PdfExport.exportCalculation()));
   document.getElementById("btn-pdf-zip").addEventListener("click", () =>
-    runExport("btn-pdf-zip", "ייצוא ה-ZIP", () => PdfExport.exportZip()));
+    runExport("btn-pdf-zip", "ייצוא ה-ZIP", () => PdfExport.exportZip(document.getElementById("draft-watermark").checked)));
   document.getElementById("btn-print").addEventListener("click", () => window.print());
 
   document.getElementById("btn-load-file").addEventListener("click", () => document.getElementById("load-file-input").click());
