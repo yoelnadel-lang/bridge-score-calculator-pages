@@ -11,18 +11,22 @@
 <div class="access-gate" id="gate">
   <div class="access-gate-box">
     <h2>אזור ניהול</h2>
-    <p>הזינו את קוד הגישה כדי להמשיך</p>
+    <p>התחברות לחשבון הניהול</p>
     <form id="gate-form">
-      <input type="password" id="gate-pin" inputmode="numeric" placeholder="קוד גישה" autofocus>
+      <input type="text" id="gate-username" placeholder="שם משתמש" autofocus>
+      <input type="password" id="gate-password" placeholder="סיסמה">
       <button type="submit" class="btn">כניסה</button>
     </form>
-    <p class="access-gate-error" id="gate-error" hidden>קוד שגוי, נסו שוב</p>
+    <p class="access-gate-error" id="gate-error" hidden></p>
+    <p class="hint">התקנה ראשונה? <a href="api/setup.php">יצירת חשבון ניהול</a></p>
   </div>
 </div>
 
 <main id="admin-main" hidden>
-  <h1>ניהול תורים — <span id="business-name"></span></h1>
-  <p class="subtitle">הרשימה נשמרת בדפדפן הזה בלבד. יש להשתמש תמיד באותו מכשיר/דפדפן לניהול התורים.</p>
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+    <h1 style="margin:0">ניהול תורים — <span id="business-name"></span></h1>
+    <button class="btn small secondary" id="logout-btn">התנתקות</button>
+  </div>
 
   <div class="card">
     <h2 style="margin-top:0">הוספת תור</h2>
@@ -60,30 +64,46 @@
   <div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
       <h2 style="margin:0">התורים שלי</h2>
-      <div class="btn-row">
-        <button class="btn small secondary" id="export-btn">גיבוי (JSON)</button>
-        <label class="btn small secondary" style="cursor:pointer;">
-          שחזור מגיבוי
-          <input type="file" id="import-file" accept="application/json" hidden>
-        </label>
-      </div>
-    </div>
-    <div class="field" style="margin-top:14px;">
-      <label for="filter-select">הצגה</label>
-      <select id="filter-select">
+      <select id="filter-select" style="width:auto;">
         <option value="upcoming">תורים קרובים</option>
         <option value="all">כל התורים</option>
         <option value="cancelled">מבוטלים</option>
       </select>
     </div>
-    <div id="appt-list"></div>
+    <div id="appt-list" style="margin-top:14px;"></div>
     <p id="empty-list" class="empty-note" hidden>אין תורים להצגה.</p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">הגדרות עסק</h2>
+    <div class="field">
+      <label for="s-business-name">שם העסק</label>
+      <input type="text" id="s-business-name">
+    </div>
+    <div class="field">
+      <label for="s-whatsapp">מספר וואטסאפ (פורמט: 972501234567)</label>
+      <input type="text" id="s-whatsapp">
+    </div>
+    <div class="field">
+      <label for="s-interval">מרווח בין שעות (בדקות)</label>
+      <input type="number" id="s-interval" min="5" step="5">
+    </div>
+    <div id="s-hours"></div>
+    <div class="btn-row">
+      <button class="btn" id="s-save-btn">שמירת הגדרות</button>
+    </div>
+    <p id="s-saved" class="hint" hidden>נשמר ✓</p>
+
+    <h3>שירותים</h3>
+    <div id="s-services"></div>
+    <div class="btn-row">
+      <button class="btn small secondary" id="s-add-service-btn">+ שירות חדש</button>
+    </div>
   </div>
 
   <div class="footer-link"><a href="index.html">חזרה לדף קביעת התור</a></div>
 </main>
 
-<script src="config.js"></script>
 <script src="store.js"></script>
 <script src="admin.js"></script>
 </body>

@@ -1,10 +1,6 @@
 (function () {
-  const cfg = window.APP_CONFIG;
   const S = window.Store;
-
-  document.title = 'קביעת תור — ' + cfg.businessName;
-  document.getElementById('page-title').textContent = 'קביעת תור אצל ' + cfg.businessName;
-  document.getElementById('page-subtitle').textContent = 'בחרו שירות, תאריך ושעה, ומלאו את הפרטים';
+  let cfg = null;
 
   const serviceEl = document.getElementById('service');
   const dateEl = document.getElementById('date');
@@ -24,29 +20,26 @@
   let selectedTime = null;
   let lastAppt = null;
 
-  cfg.services.forEach((svc) => {
-    const opt = document.createElement('option');
-    opt.value = svc.id;
-    opt.textContent = svc.name + ' (' + svc.durationMinutes + ' דק׳)';
-    serviceEl.appendChild(opt);
-  });
-
-  const today = new Date();
-  dateEl.min = S.toISODate(today);
-  const maxDate = new Date(today.getTime() + 60 * 24 * 3600 * 1000);
-  dateEl.max = S.toISODate(maxDate);
-  dateEl.value = S.toISODate(today);
-
   function currentService() {
-    return cfg.services.find((s) => s.id === serviceEl.value) || cfg.services[0];
+    return cfg.services.find((s) => String(s.id) === serviceEl.value) || cfg.services[0];
   }
 
-  function renderSlots() {
+  async function renderSlots() {
     selectedTime = null;
     slotsEl.innerHTML = '';
     if (!dateEl.value) return;
     const svc = currentService();
-    const slots = S.getAvailableSlots(dateEl.value, svc.durationMinutes, []);
+    if (!svc) return;
+    let slots = [];
+    try {
+      const data = await S.apiGet('api/appointments.php?action=available_slots&date=' + dateEl.value + '&service_id=' + svc.id);
+      slots = data.slots || [];
+    } catch (e) {
+      noSlotsEl.textContent = 'שגיאה בטעינת שעות פנויות. נסו לרענן את הדף.';
+      noSlotsEl.hidden = false;
+      return;
+    }
+    noSlotsEl.textContent = 'אין שעות פנויות בתאריך זה. נסו תאריך אחר.';
     noSlotsEl.hidden = slots.length > 0;
     slots.forEach((t) => {
       const btn = document.createElement('button');
@@ -62,55 +55,91 @@
     });
   }
 
-  serviceEl.addEventListener('change', renderSlots);
-  dateEl.addEventListener('change', renderSlots);
-  renderSlots();
-
   function showError(msg) {
     errorEl.textContent = msg;
     errorEl.hidden = false;
   }
 
-  submitBtn.addEventListener('click', () => {
+  async function init() {
+    try {
+      cfg = await S.apiGet('api/settings.php?action=public');
+    } catch (e) {
+      document.getElementById('booking-card').innerHTML =
+        '<p class="access-gate-error">לא ניתן לטעון את נתוני העסק כרגע. ודאו שהשרת (api/config.php + מסד הנתונים) הוגדר, ונסו שוב.</p>';
+      return;
+    }
+
+    document.title = 'קביעת תור — ' + cfg.businessName;
+    document.getElementById('page-title').textContent = 'קביעת תור אצל ' + cfg.businessName;
+    document.getElementById('page-subtitle').textContent = 'בחרו שירות, תאריך ושעה, ומלאו את הפרטים';
+
+    cfg.services.forEach((svc) => {
+      const opt = document.createElement('option');
+      opt.value = svc.id;
+      opt.textContent = svc.name + ' (' + svc.duration_minutes + ' דק׳' + (svc.price > 0 ? ', ₪' + svc.price : '') + ')';
+      serviceEl.appendChild(opt);
+    });
+
+    const today = new Date();
+    dateEl.min = S.toISODate(today);
+    const maxDate = new Date(today.getTime() + 60 * 24 * 3600 * 1000);
+    dateEl.max = S.toISODate(maxDate);
+    dateEl.value = S.toISODate(today);
+
+    serviceEl.addEventListener('change', renderSlots);
+    dateEl.addEventListener('change', renderSlots);
+    renderSlots();
+  }
+
+  submitBtn.addEventListener('click', async () => {
     errorEl.hidden = true;
     if (!selectedTime) return showError('נא לבחור שעה פנויה');
     if (!nameEl.value.trim()) return showError('נא להזין שם מלא');
     if (!phoneEl.value.trim()) return showError('נא להזין מספר טלפון');
 
     const svc = currentService();
-    const appt = {
-      id: S.uid(),
+    submitBtn.disabled = true;
+    let created;
+    try {
+      created = await S.apiPost('api/appointments.php?action=create', {
+        service_id: svc.id,
+        date: dateEl.value,
+        time: selectedTime,
+        client_name: nameEl.value.trim(),
+        client_phone: phoneEl.value.trim(),
+        note: noteEl.value.trim(),
+      });
+    } catch (e) {
+      submitBtn.disabled = false;
+      showError(e.message || 'אירעה שגיאה בשליחת הבקשה, נסו שוב');
+      renderSlots();
+      return;
+    }
+    submitBtn.disabled = false;
+
+    lastAppt = {
+      id: created.id,
       service: svc.name,
-      durationMinutes: svc.durationMinutes,
+      durationMinutes: svc.duration_minutes,
       date: dateEl.value,
       time: selectedTime,
       clientName: nameEl.value.trim(),
-      clientPhone: phoneEl.value.trim(),
-      note: noteEl.value.trim(),
-      status: 'pending',
-      createdAt: new Date().toISOString(),
     };
-    lastAppt = appt;
-
-    const lines = [
-      'בקשת תור חדש דרך האתר:',
-      'שירות: ' + appt.service,
-      'תאריך: ' + S.formatDateHe(appt.date),
-      'שעה: ' + appt.time,
-      'שם: ' + appt.clientName,
-      'טלפון: ' + appt.clientPhone,
-    ];
-    if (appt.note) lines.push('הערה: ' + appt.note);
-    const message = lines.join('\n');
 
     if (cfg.whatsappNumber) {
-      const url = 'https://wa.me/' + cfg.whatsappNumber + '?text=' + encodeURIComponent(message);
-      window.open(url, '_blank', 'noopener');
+      const lines = [
+        'בקשת תור חדש דרך האתר:',
+        'שירות: ' + svc.name,
+        'תאריך: ' + S.formatDateHe(dateEl.value),
+        'שעה: ' + selectedTime,
+        'שם: ' + nameEl.value.trim(),
+        'טלפון: ' + phoneEl.value.trim(),
+      ];
+      if (noteEl.value.trim()) lines.push('הערה: ' + noteEl.value.trim());
+      window.open('https://wa.me/' + cfg.whatsappNumber + '?text=' + encodeURIComponent(lines.join('\n')), '_blank', 'noopener');
     }
 
-    confirmSummary.textContent = cfg.whatsappNumber
-      ? 'הבקשה נפתחה בוואטסאפ — יש לשלוח את ההודעה כדי להשלים את הבקשה. ' + appt.service + ' ביום ' + S.formatDateHe(appt.date) + ' בשעה ' + appt.time + '.'
-      : message + '\n\n(העסק טרם הגדיר מספר וואטסאפ — יש להעתיק ולשלוח הודעה זו ישירות)';
+    confirmSummary.textContent = 'הבקשה נשלחה ונקלטה במערכת. ' + svc.name + ' ביום ' + S.formatDateHe(dateEl.value) + ' בשעה ' + selectedTime + '. התור יאושר סופית מולכם.';
 
     bookingCard.hidden = true;
     confirmCard.hidden = false;
@@ -136,4 +165,6 @@
     confirmCard.hidden = true;
     bookingCard.hidden = false;
   });
+
+  init();
 })();

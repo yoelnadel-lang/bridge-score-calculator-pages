@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>תוצאת תשלום</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <div class="card" style="text-align:center; margin-top:40px;">
+    <div id="ok" hidden>
+      <h1>התשלום התקבל ✅</h1>
+      <p>תודה! אפשר לסגור את החלון הזה.</p>
+    </div>
+    <div id="fail" hidden>
+      <h1>התשלום לא הושלם</h1>
+      <p>לא בוצע חיוב. אפשר לנסות שוב או ליצור קשר.</p>
+    </div>
+  </div>
+</main>
+<script>
+  const status = new URLSearchParams(location.search).get('status');
+  document.getElementById(status === 'success' ? 'ok' : 'fail').hidden = false;
+</script>
+</body>
+</html>
