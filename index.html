@@ -77,6 +77,7 @@
       <button id="btn-pdf-summary" class="btn">📊 ייצוא תקציר מנהלים</button>
       <button id="btn-pdf-idcard" class="btn">🪪 ייצוא ת.ז</button>
       <button id="btn-pdf-calc" class="btn" title="פירוט מלא של כל הנוסחאות וההצבות שקבעו את הציון, כמו בלשונית 'בקרה'">🧮 ייצוא חישוב ציון</button>
+      <button id="btn-xlsx-both" class="btn" title="ממלא את תבנית ה-Excel האמיתית של 'חישוב ציון גשר' בנתוני הסקירה (נוסחאות אמיתיות), ומייצא גם PDF תואם">🖨️📗 ייצוא חישוב ציון PDF + EXCEL</button>
       <button id="btn-pdf-zip" class="btn" title="קובץ ZIP אחד עם דוח הסקירה (PDF) וקובץ טעינה (JSON) — להעברה, שיתוף או גיבוי">📦 ייצוא סקירה (ZIP)</button>
       <button id="btn-scan-qr" class="btn" title="שחזור נתונים מקוד QR שהודפס בדוח קודם — לא כולל תמונות">📷 שחזור מ-QR</button>
       <button id="btn-print" class="btn">🖨️ הדפסת דוח</button>
@@ -149,13 +150,12 @@
         <label>שם המזמין
           <input type="text" id="st-client" placeholder="עירית ירושלים">
         </label>
-        <label>לוגו מזמין העבודה (יודפס בפינת עמוד 1 בדוח)
+        <label>לוגואי מזמין העבודה (יודפסו בפינת עמוד 1 בדוח, מול הלוגו שלנו — אפשר להוסיף כמה)
           <span class="add-row" style="margin:0">
-            <button type="button" class="btn btn-sm" id="btn-client-logo">📎 בחר קובץ לוגו</button>
-            <button type="button" class="btn btn-sm btn-danger" id="btn-client-logo-remove" hidden>✕ הסר</button>
+            <button type="button" class="btn btn-sm" id="btn-client-logo">📎 הוסף לוגו</button>
           </span>
           <input type="file" id="client-logo-input" accept="image/*" hidden>
-          <span class="hint" id="client-logo-status">לא נבחר לוגו — בדוח תודפס רק פינת הלוגו שלנו</span>
+          <span id="client-logos-list"></span>
         </label>
         <label>סוג הסקירה
           <input type="text" id="st-survey-type">
@@ -510,7 +510,9 @@
 <script src="vendor/qrcode.js" defer></script>
 <script src="vendor/jsQR.js" defer></script>
 <script src="vendor/jszip.min.js" defer></script>
+<script src="vendor/exceljs.min.js" defer></script>
 <script src="recovery.js" defer></script>
 <script src="pdf.js" defer></script>
+<script src="xlsx-export.js" defer></script>
 </body>
 </html>

@@ -76,6 +76,16 @@ function renderSketches(state) {
     <button class="btn btn-sm" data-action="sketch-add">➕ הוסף סקיצה</button>`;
 }
 
+// --- לוגואי מזמיני העבודה (0 עד כמה) — כל אחד תמונה ממוזערת + הסרה ---
+function renderClientLogos(state) {
+  if (!state.clientLogos.length) return '<span class="hint">לא נבחרו לוגואים — בדוח תודפס רק פינת הלוגו שלנו</span>';
+  return `<div class="client-logos-row">${state.clientLogos.map((url, i) => `
+    <span class="client-logo-item">
+      <img src="${esc(url)}" class="client-logo-thumb">
+      <button type="button" class="btn btn-sm btn-danger" data-action="client-logo-remove" data-idx="${i}">✕</button>
+    </span>`).join("")}</div>`;
+}
+
 // --- טבלת הערות חופשיות (תאריך + טקסט) — משותפת ל-שינויים/מהנדס/תקשורת ---
 function renderNotesTable(notes, listKey) {
   const rows = notes.map((n) => `<tr>
@@ -822,4 +832,157 @@ function renderSummary(state, result, summary) {
 
   html += "</div>";
   return html;
+}
+
+// ============================================================================
+// PDF "חישוב ציון — במבנה קובץ ה-Excel": אותה טבלת רכיבים/פגמים/ציון כמו
+// ב-XlsxExport (עמודות, סדר, כותרות), כערכים סטטיים לצורך תצוגת PDF — לא
+// נוסחאות (אלו רק בקובץ ה-Excel החי). מאפשר להפיק את אותו מבנה ישירות מהמערכת
+// בלי תלות בקובץ Excel/תוכנה מקומית.
+// ============================================================================
+function xlsxPdfNaturalCodeCompare(a, b) {
+  const A = a == null || a === "" ? null : String(a);
+  const B = b == null || b === "" ? null : String(b);
+  if (A == null && B == null) return 0;
+  if (A == null) return 1;
+  if (B == null) return -1;
+  const pa = A.split("."), pb = B.split(".");
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const va = parseFloat(pa[i]) || 0, vb = parseFloat(pb[i]) || 0;
+    if (va !== vb) return va - vb;
+  }
+  return 0;
+}
+// זהה ל-winningDefectInfo ב-xlsx-export.js — לתצוגה בלבד (הערכים המספריים
+// תמיד נלקחים מ-Calc); ראו שם את ההסבר המלא על מקרה השקלול הרב-תתי-רכיבי
+function xlsxPdfWinningDefectInfo(comp, res) {
+  if (!res.surveyed || res.aux) return { code: "", ex: "" };
+  if (!comp.defects.length || res.defaulted) return { code: "", ex: "A" };
+  const atMax = comp.defects.filter((d) => d.s === res.sMax);
+  const codes = [...new Set(atMax.map((d) => d.def).filter(Boolean))].join(", ");
+  if ((comp.subs ? comp.subs.length : 1) > 1) return { code: codes, ex: "משוקלל" };
+  const exVal = Math.max(...atMax.map((d) => (EXTENT[d.ex] ? EXTENT[d.ex].value : 0)));
+  const letter = exVal === 0 ? (res.sMax === 1 ? "A" : "B") : exVal === 0.1 ? "C" : exVal === 0.3 ? "D" : exVal === 0.7 ? "E" : "";
+  return { code: codes, ex: letter };
+}
+// מחזיר חלקים (לא HTML שלם) כדי ש-pdf.js יוכל למדוד ולפצל לעמודים אמיתיים
+// לפי גובה שורות בפועל — בדיוק כמו טבלת "תיעוד סקירת רכיבים" בדוח הרגיל,
+// כדי שאף שורה לא תיחתך במעבר בין עמודים
+function xlsxPdfComponentsTableParts(state) {
+  const rows = [];
+  for (const span of state.spans) {
+    const comps = [...span.components].sort((a, b) => xlsxPdfNaturalCodeCompare(a.catalogId, b.catalogId));
+    for (const c of comps) {
+      const subs = c.subs || [];
+      const detail = subs.map((s) => `${s.id}: ${fmt(s.size, 2)}${s.size2 ? " / " + fmt(s.size2, 2) : ""}${s.note ? " (" + s.note + ")" : ""}`).join(" | ");
+      rows.push(`<tr>
+        <td>${esc(span.id)}</td><td>${esc(c.catalogId || "")}</td><td class="xr">${esc(c.name || "")}</td>
+        <td>${esc(c.importance && IMPORTANCE[c.importance] ? IMPORTANCE[c.importance].label : "—")}</td>
+        <td>${esc(c.unit || "")}</td><td>${subs.length}</td>
+        <td class="xr">${esc(detail)}</td><td>${c.surveyed === false ? "✗" : "✓"}</td>
+      </tr>`);
+    }
+  }
+  const thead = `<thead><tr>
+      <th>מפתח</th><th>קוד קטלוג</th><th>שם הרכיב</th><th>סיווג חשיבות</th>
+      <th>יחידת מידה</th><th>כמות תת-רכיבים</th><th>פירוט מידות</th><th>נסקר</th>
+    </tr></thead>`;
+  return { thead, rows };
+}
+// --- פאנל תוצאה (רגל הגיליון): כותרת אפורה+טקסט אדום, פאנל ציאן, תווית
+// אדומה מודגשת בתיבה לבנה, ערך שחור מודגש בתיבה לבנה — כמו בקובץ המקור ---
+function xlsxPdfResultPanel(bannerText, rowsSpec) {
+  const rows = rowsSpec.map(([label, formulaText, value, numFmt]) => `
+    <div class="xlsx-pdf-panel-row">
+      <span class="xlsx-pdf-box xlsx-pdf-label" dir="ltr">${esc(label)}</span>
+      <span class="xlsx-pdf-formula">${esc(formulaText)}</span>
+      <span class="xlsx-pdf-box xlsx-pdf-value">${fmt(value, numFmt)}</span>
+    </div>`).join("");
+  return `<div class="xlsx-pdf-banner">${esc(bannerText)}</div>
+    <div class="xlsx-pdf-panel">${rows}</div>`;
+}
+function xlsxPdfScoreTableParts(pairs, showSpanCol) {
+  const rows = pairs.map(({ comp, res, spanId }) => {
+    const win = xlsxPdfWinningDefectInfo(comp, res);
+    const notExist = !res.surveyed;
+    const impLabel = res.aux ? "" : (IMPORTANCE[comp.importance] ? IMPORTANCE[comp.importance].label : "");
+    return `<tr>
+      <td>${esc(comp.catalogId || "")}</td><td class="xr">${esc(comp.name || "")}</td>
+      ${showSpanCol ? `<td>${esc(spanId)}</td>` : ""}
+      <td class="xinfo">${esc(impLabel)}</td>
+      <td class="xin">${esc(win.code)}</td>
+      <td class="xin">${notExist ? "" : fmt(res.sMax, 0)}</td>
+      <td class="xin">${notExist ? "" : esc(win.ex)}</td>
+      <td class="xinfo">${notExist ? "0" : fmt(res.ecs)}</td>
+      <td class="xinfo">${notExist ? "0" : fmt(res.ecf)}</td>
+      <td class="xinfo"><strong>${notExist ? "0" : fmt(res.eci)}</strong></td>
+      <td class="xinfo">${fmt(res.eif)}</td>
+      <td class="xr">${notExist ? "הרכיב אינו קיים" : ""}</td>
+    </tr>`;
+  });
+  const thead = `<thead><tr>
+      <th>קוד רכיב</th><th>שם הרכיב</th>${showSpanCol ? "<th>מפתח</th>" : ""}
+      <th>סיווג חשיבות</th><th>קוד פגם</th><th>חומרה</th><th>היקף</th>
+      <th>Ecs</th><th>Ecf</th><th>Eci</th><th>Eif</th><th>הערות</th>
+    </tr></thead>`;
+  return { thead, rows };
+}
+function xlsxPdfScoreFooterHtml(footer) {
+  return xlsxPdfResultPanel("ערך דירוג מצב המבנה", [
+      ["SCSAV=", "sum(Eci·Eif)/sum(Eif) =", footer.scsAv, 3],
+      ["SCSCRIT=", "max{Eci בדרגת חשיבות גבוהה מאוד} =", footer.scsCrit, 3],
+    ]) + xlsxPdfResultPanel("ערך סמן דירוג מצב המבנה", [
+      ["Condition PIAV=", "100-2{(SCSAV)²+(6.5·SCSAV)-7.5} =", footer.cpiAv, 2],
+      ["Condition PICrit=", "100-2{(SCSCrit)²+(6.5·SCSCrit)-7.5} =", footer.cpiCrit, 2],
+    ]);
+}
+// --- רשימת "מקטעים" (לא HTML שלם) — כל מקטע הוא טבלה אחת עם כותרת ו-thead
+// משלה, ואולי פאנל-תוצאה בסוף. pdf.js ממדד ומפצל כל מקטע לעמודים אמיתיים
+// לפי גובה שורות (בדיוק כמו מקטעי דוח הסקירה הרגיל) — כך שאף שורה לא
+// נחתכת באמצע במעבר בין עמודים, בניגוד לגרסה הקודמת שחתכה קנבס ארוך לפי
+// גובה קבוע בלי להתחשב בגבולות השורות ---
+function buildXlsxStyleSections(state, result) {
+  const sections = [];
+  const compParts = xlsxPdfComponentsTableParts(state);
+  sections.push({ title: `חלוקה לרכיבים — ${esc(state.name || state.number || "ללא שם")}`, thead: compParts.thead, rows: compParts.rows, footerHtml: "" });
+
+  if (result.singleUnit) {
+    let idx = 0;
+    const pairs = [];
+    state.spans.forEach((span) => {
+      span.components.forEach((comp) => pairs.push({ comp, res: result.unit.components[idx++], spanId: span.id }));
+    });
+    pairs.sort((a, b) => xlsxPdfNaturalCodeCompare(a.comp.catalogId, b.comp.catalogId));
+    const parts = xlsxPdfScoreTableParts(pairs, state.spans.length > 1);
+    sections.push({
+      title: "גיליון לחישוב ציון המבנה", thead: parts.thead, rows: parts.rows,
+      footerHtml: xlsxPdfScoreFooterHtml({ scsAv: result.unit.scsAv, scsCrit: result.unit.scsCrit, cpiAv: result.unit.cpiAv, cpiCrit: result.unit.cpiCrit }),
+    });
+  } else {
+    result.spans.forEach((spanResult, i) => {
+      const span = state.spans[i];
+      const pairs = span.components.map((comp, j) => ({ comp, res: spanResult.comps[j] }));
+      pairs.sort((a, b) => xlsxPdfNaturalCodeCompare(a.comp.catalogId, b.comp.catalogId));
+      const parts = xlsxPdfScoreTableParts(pairs, false);
+      sections.push({
+        title: `גיליון לחישוב ציון המבנה — מפתח ${esc(span.id)} מתוך ${state.spans.length}`, thead: parts.thead, rows: parts.rows,
+        footerHtml: xlsxPdfScoreFooterHtml({ scsAv: spanResult.unit.scsAv, scsCrit: spanResult.unit.scsCrit, cpiAv: spanResult.unit.cpiAv, cpiCrit: spanResult.unit.cpiCrit }),
+      });
+    });
+    const dims = state.spans.map((s) => +s.dim || 0);
+    const maxCrit = Math.max(...result.spans.map((s) => s.unit.scsCrit));
+    const aggRows = result.spans.map((spanResult, i) => `<tr><td>${esc(state.spans[i].id)}</td><td>${fmt(dims[i])}</td>
+        <td class="xin">${fmt(spanResult.unit.scsAv, 3)}</td>
+        <td class="${spanResult.unit.scsCrit === maxCrit ? "xmax" : "xin"}">${fmt(spanResult.unit.scsCrit, 3)}</td></tr>`);
+    const aggThead = `<thead><tr><th>מס' מפתח</th><th>Deck Area</th><th>SCS av</th><th>SCS crit</th></tr></thead>`;
+    // אותו פאנל תוצאה (כותרת אפורה+פאנל ציאן+תיבות) כמו בכל גיליון מפתח,
+    // כדי שיתאים חזותית ולא ייפול לבאג-פריסה של טבלה ad-hoc נפרדת
+    const aggFooter = xlsxPdfScoreFooterHtml({
+      scsAv: result.bridge.method_norm.scsAv, scsCrit: result.bridge.scsCrit,
+      cpiAv: result.bridge.method_norm.cpiAv, cpiCrit: result.bridge.cpiCrit,
+    });
+    sections.push({ title: "חישוב דירוג מצב המבני לקבוצה — סיכום כל המפתחים", thead: aggThead, rows: aggRows, footerHtml: aggFooter });
+  }
+  return sections;
 }

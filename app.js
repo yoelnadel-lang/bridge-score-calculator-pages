@@ -5,6 +5,7 @@
 
 const STORAGE_KEY = "bridge-score-state-v1";
 const MAX_SPANS = 30;
+const MAX_CLIENT_LOGOS = 5;
 let uidCounter = 1;
 const nextUid = () => "u" + uidCounter++;
 
@@ -354,7 +355,7 @@ function defaultState() {
     inspClass: "", inspDate: todayISO(), prevInspDate: "",
     surveyorName: "", companyName: "",
     client: "", surveyType: "שגרתית", designer: "", coordX: "", coordY: "", roadNumber: "",
-    clientLogoDataUrl: null,
+    clientLogos: [],
     immediateAttention: { text: "", photo: "" },
     findingPhotos: requiredFindingsFor("BRG"), sketches: [], drawingsFile: "",
     changeNotes: [], surveyorNotes: [], engineerNotes: [], communicationNotes: [],
@@ -378,6 +379,9 @@ function migrateState(s) {
     const parts = s.coordinates.trim().split(/\s+/);
     out.coordX = parts[0] || ""; out.coordY = parts[1] || "";
   }
+  // מצב שמור מהגרסה הקודמת (לוגו יחיד) מועבר לרשימה, כדי לא לאבד אותו
+  out.clientLogos = Array.isArray(out.clientLogos) ? out.clientLogos.filter(Boolean) : [];
+  if (!out.clientLogos.length && s.clientLogoDataUrl) out.clientLogos = [s.clientLogoDataUrl];
   out.idCard = normalizeIdCardValues(out.idCard);
   out.spans = (out.spans || []).map((sp) => ({
     dimNote: "", ...sp,
@@ -690,10 +694,8 @@ function update() {
   document.getElementById("drawings-file-status").innerHTML = drawingsFileAttached
     ? '<span class="photo-chip ok">✔ קובץ הועלה</span>'
     : '<span class="photo-chip missing">לא הועלה קובץ עדיין</span>';
-  document.getElementById("client-logo-status").innerHTML = state.clientLogoDataUrl
-    ? '<span class="photo-chip ok">✔ לוגו הועלה</span>'
-    : "לא נבחר לוגו — בדוח תודפס רק פינת הלוגו שלנו";
-  document.getElementById("btn-client-logo-remove").hidden = !state.clientLogoDataUrl;
+  document.getElementById("client-logos-list").innerHTML = renderClientLogos(state);
+  document.getElementById("btn-client-logo").disabled = state.clientLogos.length >= MAX_CLIENT_LOGOS;
   document.getElementById("ia-text").value = state.immediateAttention.text;
   document.getElementById("ia-photo").value = state.immediateAttention.photo;
   document.getElementById("ia-photo-status").innerHTML =
@@ -854,22 +856,22 @@ function init() {
     e.target.value = "";
     scheduleUpdate();
   });
-  // לוגו מזמין העבודה — נשמר כ-data URL בתוך state עצמו (לא כמו קובץ
-  // התרשימים) כי הוא צריך להיות זמין ישירות לתגית <img> בייצוא ה-PDF,
-  // ומשום שהוא קטן מספיק לא להכביד על localStorage/ZIP/קובץ הטעינה
-  document.getElementById("btn-client-logo").addEventListener("click", () => document.getElementById("client-logo-input").click());
+  // לוגואי מזמיני העבודה — נשמרים כ-data URL בתוך state עצמו (לא כמו קובץ
+  // התרשימים) כי הם צריכים להיות זמינים ישירות לתגית <img> בייצוא ה-PDF,
+  // ומשום שהם קטנים מספיק לא להכביד על localStorage/ZIP/קובץ הטעינה.
+  // אחד או כמה (עד MAX_CLIENT_LOGOS) — למשל כשכמה גופים מזמינים יחד.
+  document.getElementById("btn-client-logo").addEventListener("click", () => {
+    if (state.clientLogos.length >= MAX_CLIENT_LOGOS) { alert(`עד ${MAX_CLIENT_LOGOS} לוגואים.`); return; }
+    document.getElementById("client-logo-input").click();
+  });
   document.getElementById("client-logo-input").addEventListener("change", (e) => {
     const file = e.target.files[0];
     e.target.value = "";
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) { alert("קובץ הלוגו גדול מדי (מעל 2MB) — נא לבחור קובץ קטן יותר."); return; }
     const reader = new FileReader();
-    reader.onload = () => { state.clientLogoDataUrl = reader.result; scheduleUpdate(); };
+    reader.onload = () => { state.clientLogos.push(reader.result); scheduleUpdate(); };
     reader.readAsDataURL(file);
-  });
-  document.getElementById("btn-client-logo-remove").addEventListener("click", () => {
-    state.clientLogoDataUrl = null;
-    scheduleUpdate();
   });
   // "תשומת לב מיידית" — שדות סטטיים, לכן שמירה ישירה בלי רינדור מלא (הסמן
   // בטקסט ארוך היה קופץ). רק תגיות הסטטוס של קוד התמונה מתרעננות בנפרד.
@@ -958,6 +960,9 @@ function init() {
     }
     else if (action === "sketch-remove") {
       state.sketches = state.sketches.filter((s) => s.uid !== el.dataset.sketch); scheduleUpdate();
+    }
+    else if (action === "client-logo-remove") {
+      state.clientLogos.splice(+el.dataset.idx, 1); scheduleUpdate();
     }
     else if (action === "note-add" && NOTE_LISTS.includes(el.dataset.list)) {
       // אותה בעיה בדיוק שתוקנה בממצאים ובסקיצות — ההערה שהוקלדה זה עתה אבדה
@@ -1258,6 +1263,13 @@ function init() {
     runExport("btn-pdf-idcard", "ייצוא תעודת הזהות", () => PdfExport.exportIdCard()));
   document.getElementById("btn-pdf-calc").addEventListener("click", () =>
     runExport("btn-pdf-calc", "ייצוא חישוב הציון", () => PdfExport.exportCalculation()));
+  document.getElementById("btn-xlsx-both").addEventListener("click", () =>
+    runExport("btn-xlsx-both", "ייצוא חישוב ציון", async () => {
+      const errors = [];
+      try { await XlsxExport.exportCalculation(); } catch (e) { errors.push("Excel: " + e.message); }
+      try { await PdfExport.exportCalculationXlsxStyle(); } catch (e) { errors.push("PDF: " + e.message); }
+      if (errors.length) throw new Error(errors.join(" · "));
+    }));
   document.getElementById("btn-pdf-zip").addEventListener("click", () =>
     runExport("btn-pdf-zip", "ייצוא ה-ZIP", () => PdfExport.exportZip(document.getElementById("draft-watermark").checked)));
   document.getElementById("btn-print").addEventListener("click", () => window.print());

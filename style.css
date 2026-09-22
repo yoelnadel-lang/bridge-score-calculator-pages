@@ -142,6 +142,13 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 .photo-chip.ok { background: #dafbe1; color: #1a7f37; border: 1px solid #b4e6c1; }
 .photo-chip.missing { background: #f6f8fa; color: #57606a; border: 1px solid var(--border); }
 
+.client-logos-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+.client-logo-item {
+  display: flex; align-items: center; gap: 6px; border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px 6px; background: #fff;
+}
+.client-logo-thumb { width: 60px; height: 34px; object-fit: contain; display: block; }
+
 .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
 .tab {
   border: 1px solid var(--border); border-radius: 20px; padding: 5px 16px;
@@ -377,6 +384,33 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
 #pdf-calc .pdf-sub { margin: 0 0 14px; color: #57606a; font-size: .9rem; }
 #pdf-calc h3 { color: var(--primary); font-size: 1rem; margin: 18px 0 6px; }
 
+/* ייצוא "חישוב ציון — במבנה קובץ ה-Excel" PDF — אותה טבלת נתונים כמו
+   ב-XlsxExport (ראו render.js: buildXlsxStyleSections), כערכים סטטיים.
+   מוצג בתוך עמודי .gov-page רגילים (כותרת+לוגואים+מספור עמוד חוזרים,
+   פיצול אמיתי לפי גובה שורות) — לא מיכל נפרד */
+.xlsx-pdf-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 6px; }
+.xlsx-pdf-table th, .xlsx-pdf-table td { border: 1px solid #999; padding: 2px 4px; text-align: center; }
+.xlsx-pdf-table th { background: #c0c0c0; font-weight: bold; }
+.xlsx-pdf-table td.xr { text-align: right; }
+.xlsx-pdf-table td.xin { background: #ffff99; }
+.xlsx-pdf-table td.xinfo { background: #ccffff; }
+.xlsx-pdf-table td.xmax { background: #8db4e2; }
+
+/* פאנל תוצאה (SCSav/SCScrit/Condition PI) — כותרת אפורה+טקסט אדום, גוף
+   ציאן, תווית אדומה בתיבה לבנה, ערך שחור מודגש בתיבה לבנה — כמו במקור */
+.xlsx-pdf-banner {
+  background: #c0c0c0; color: #d00; font-weight: bold; text-align: center;
+  padding: 3px; border: 1px solid #666; font-size: 11px; margin-top: 10px;
+}
+.xlsx-pdf-panel {
+  background: #ccffff; border: 1px solid #666; border-top: none; padding: 6px 10px;
+}
+.xlsx-pdf-panel-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 4px 0; }
+.xlsx-pdf-box { background: #fff; border: 1px solid #666; padding: 2px 10px; border-radius: 2px; }
+.xlsx-pdf-label { color: #d00; font-weight: bold; }
+.xlsx-pdf-value { color: #000; font-weight: bold; font-size: 13px; min-width: 50px; text-align: center; }
+.xlsx-pdf-formula { direction: ltr; }
+
 /* דוח סקירה PDF — פורמט רשמי, A4 לרוחב, עמוד = div נפרד (לא קנבס ארוך שנחתך),
    כך שכותרת המבנה ומספור העמוד חוזרים אמיתית על כל עמוד. */
 #gov-report { position: absolute; top: 0; left: -20000px; }
@@ -401,8 +435,11 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
 .gov-report-title { font-weight: 700; text-align: center; }
 .gov-title-row { display: flex; align-items: center; margin-bottom: 4px; flex: 0 0 auto; }
 .gov-title-row .gov-report-title { flex: 1 1 auto; min-width: 0; }
-.gov-logo-box { flex: 0 0 90px; width: 90px; height: 40px; display: flex; align-items: center; justify-content: center; }
+.gov-logo-box { flex: 0 0 110px; width: 110px; height: 50px; display: flex; align-items: center; justify-content: center; }
 .gov-logo-box img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+/* לוגואי מזמין העבודה — אחד או כמה, ברווח קבוע וסביר ביניהם; לא רוחב קבוע
+   (כמו gov-logo-box בודד) כדי שיוכל לגדול עם מספר הלוגואים */
+.gov-logo-group { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
 
 .gov-head { width: 100%; border-collapse: collapse; margin-bottom: 6px; flex: 0 0 auto; }
 .gov-head td { border: 1px solid #000; padding: 3px 6px; }
@@ -414,6 +451,11 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
 .gov-table, .gov-kv { width: 100%; border-collapse: collapse; flex: 0 0 auto; }
 .gov-table th, .gov-table td, .gov-kv th, .gov-kv td { border: 1px solid #000; padding: 3px 6px; text-align: right; vertical-align: top; }
 .gov-table th { font-weight: 700; }
+/* עמודות S/Ex בטבלת "תיעוד סקירת רכיבים" — ערך של תו-שניים בלבד, אבל
+   ברירת המחדל (רוחב-טור אוטומטי) מצמצמת אותן כמעט לאפס; קובעים רוחב
+   מינימלי יחסי לשאר עמודות הטבלה כדי שייראו פרופורציונליות ולא דחוסות */
+.gov-table th.gov-col-s, .gov-table th.gov-col-ex { width: 6%; text-align: center; }
+.gov-table td.gov-col-s, .gov-table td.gov-col-ex { text-align: center; }
 /* שורה אחת לכל שדה (כמו במקור) — עמודת התווית ברוחב קבוע, הערך תופס את השאר */
 .gov-kv th { font-weight: 400; width: 230px; white-space: nowrap; }
 .gov-kv-cpi { font-weight: 700; }

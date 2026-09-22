@@ -38,13 +38,15 @@ const PdfExport = (() => {
   // --- כותרת חוזרת בראש כל עמוד (שם/מספר מבנה, סוקר, חברה, דף N מתוך M) ---
   // "דו"ח סקירה" מופיע רק בעמוד הראשון, מעל הטבלה החוזרת — כך גם במקור
   function govHeaderHTML(state, pageNum, totalPages) {
-    // לוגו החברה (קבוע, logo.jpeg) ולוגו מזמין העבודה (state.clientLogoDataUrl,
-    // אם הועלה) בשתי הפינות של עמוד 1 בלבד — תיבה ריקה משני הצדדים גם כש
-    // חסר לוגו אחד, כדי שהכותרת תישאר ממורכזת ולא תיסחף לצד אחד
+    // לוגו החברה (קבוע, logo.jpeg) בפינה הימנית, לוגואי מזמין העבודה
+    // (state.clientLogos, אחד או כמה) בפינה השמאלית — עמוד 1 בלבד. תיבה
+    // ריקה בצד שמאל גם כשאין לוגו למזמין, כדי שהכותרת תישאר ממורכזת
+    const clientLogos = (state.clientLogos || []).map((url) =>
+      `<div class="gov-logo-box"><img src="${esc(url)}"></div>`).join("");
     const title = pageNum === 1 ? `<div class="gov-title-row">
-      <div class="gov-logo-box">${state.clientLogoDataUrl ? `<img src="${esc(state.clientLogoDataUrl)}">` : ""}</div>
+      <div class="gov-logo-box gov-logo-ours"><img src="logo.jpeg"></div>
       <div class="gov-report-title">דו"ח סקירה</div>
-      <div class="gov-logo-box"><img src="logo.jpeg"></div>
+      <div class="gov-logo-group">${clientLogos || '<div class="gov-logo-box"></div>'}</div>
     </div>` : "";
     return `${title}<table class="gov-head">
       <tr>
@@ -68,9 +70,9 @@ const PdfExport = (() => {
 
   // --- מדידת גובה שורות אמיתי (רינדור בפועל, לא הערכה) לפיצול טבלה ארוכה
   // לעמודים — כותרת הטבלה חוזרת על כל עמוד ---
-  function measureRowHeights(theadHtml, rowsHtml, contentWidthPx, scratch) {
+  function measureRowHeights(theadHtml, rowsHtml, contentWidthPx, scratch, tableClass) {
     const table = document.createElement("table");
-    table.className = "gov-table";
+    table.className = tableClass || "gov-table";
     table.style.width = contentWidthPx + "px";
     table.innerHTML = theadHtml + `<tbody>${rowsHtml.join("")}</tbody>`;
     scratch.appendChild(table);
@@ -204,14 +206,14 @@ const PdfExport = (() => {
             <td>${esc((c.catalogId != null ? c.catalogId + ". " : "") + c.name)}</td>
             <td>${d.sub}</td>
             <td>${esc(d.def || "—")}${cat ? " " + esc(cat.name_he) : ""}</td>
-            <td>${d.s}</td><td>${esc(d.ex)}</td>
+            <td class="gov-col-s">${d.s}</td><td class="gov-col-ex">${esc(d.ex)}</td>
             <td>${esc(d.note || "")}</td>
             <td dir="ltr">${esc(d.photo || "")}</td>
           </tr>`);
         }
       }
     }
-    const thead = `<thead><tr><th>מפתח</th><th>רכיב</th><th>מס' משנה</th><th>פגם</th><th>S</th><th>Ex</th><th>הערות</th><th>קוד תמונה</th></tr></thead>`;
+    const thead = `<thead><tr><th>מפתח</th><th>רכיב</th><th>מס' משנה</th><th>פגם</th><th class="gov-col-s">S</th><th class="gov-col-ex">Ex</th><th>הערות</th><th>קוד תמונה</th></tr></thead>`;
     if (!rows.length) {
       return [`${govSectionTitle(3, "תיעוד סקירת רכיבים")}<table class="gov-table">${thead}<tbody><tr><td colspan="8" class="gov-empty">לא נרשמו פגמים</td></tr></tbody></table>`];
     }
@@ -708,6 +710,85 @@ const PdfExport = (() => {
     }
   }
 
+  // --- ייצוא "חישוב ציון — במבנה קובץ ה-Excel": אותו מבנה טבלאות/עמודות
+  // כמו XlsxExport.exportCalculation() (buildXlsxStyleSections), כ-PDF
+  // מופק ישירות מהמערכת. כל עמוד div נפרד (לא קנבס ארוך שנחתך) — בדיוק
+  // כמו "דוח סקירה" הרגיל — כך ששום שורה בטבלה לא נחתכת באמצע במעבר בין
+  // עמודים, וכותרת המבנה/הלוגואים/מספור העמוד חוזרים אמיתית על כל עמוד ---
+  function paginateXlsxSection(section, budgetInfo, scratch) {
+    const { title, thead, rows, footerHtml } = section;
+    const titleHtml = `<div class="gov-section-title">${esc(title)}</div>`;
+    if (!rows.length) {
+      return [`${titleHtml}<table class="xlsx-pdf-table">${thead}<tbody><tr><td class="gov-empty">אין נתונים</td></tr></tbody></table>${footerHtml}`];
+    }
+    const { theadH, heights } = measureRowHeights(thead, rows, budgetInfo.contentW, scratch, "xlsx-pdf-table");
+    const chunks = paginateRows(rows, heights, budgetInfo.bodyHeight - theadH);
+    if (footerHtml && chunks.length) {
+      // אם השורה האחרונה בעמוד האחרון לא נכנסת יחד עם פאנל התוצאה, מעבירים
+      // רק אותה (ואת מה שאחריה) לעמוד חדש — כמו המקרא ב"תיעוד סקירת רכיבים"
+      const footerH = measureLegendHeight(footerHtml, scratch);
+      const lastPageRoom = budgetInfo.bodyHeight - theadH - footerH;
+      const last = chunks[chunks.length - 1];
+      const startIdx = rows.length - last.length;
+      let acc = 0, splitAt = last.length;
+      for (let i = 0; i < last.length; i++) {
+        acc += heights[startIdx + i];
+        if (acc > lastPageRoom) { splitAt = i; break; }
+      }
+      if (splitAt < last.length) chunks.push(last.splice(splitAt));
+    }
+    return chunks.map((chunk, i) =>
+      `${titleHtml}<table class="xlsx-pdf-table">${thead}<tbody>${chunk.join("")}</tbody></table>${i === chunks.length - 1 ? footerHtml : ""}`);
+  }
+  async function buildXlsxStylePdf(scratch, container) {
+    const input = buildEngineInput();
+    const result = Calc.computeStructure(input);
+    const sections = buildXlsxStyleSections(state, result);
+
+    const probe = document.createElement("div");
+    probe.className = "gov-page";
+    probe.innerHTML = govHeaderHTML(state, 1, 99) + '<div class="gov-section-title">מדידה</div>';
+    scratch.appendChild(probe);
+    const headerH = probe.querySelector(".gov-head").getBoundingClientRect().height;
+    const titleH = probe.querySelector(".gov-section-title").getBoundingClientRect().height;
+    probe.remove();
+    const contentW = PAGE_W_PX - GOV_PAD * 2;
+    const bodyHeight = PAGE_H_PX - GOV_PAD * 2 - headerH - titleH - 10;
+    const budgetInfo = { bodyHeight, contentW };
+
+    const pageBodies = sections.flatMap((s) => paginateXlsxSection(s, budgetInfo, scratch));
+
+    const total = pageBodies.length;
+    const pdf = new jspdf.jsPDF("l", "mm", "a4");
+    for (let i = 0; i < total; i++) {
+      const pageEl = document.createElement("div");
+      pageEl.className = "gov-page";
+      pageEl.innerHTML = govHeaderHTML(state, i + 1, total) + pageBodies[i];
+      container.appendChild(pageEl);
+      await decodeImages(pageEl);
+      fitImages(pageEl);
+      const canvas = await html2canvas(pageEl, { scale: SCALE, backgroundColor: "#ffffff" });
+      if (i) pdf.addPage();
+      pdf.addImage(canvas.toDataURL("image/jpeg", JPEG_QUALITY), "JPEG", 0, 0, PAGE_W_MM, PAGE_H_MM);
+      pageEl.remove();
+    }
+    return pdf;
+  }
+  async function exportCalculationXlsxStyle() {
+    if (!hasAnyComponents()) { alert("אין נתונים לייצוא — הוסף רכיבים תחילה."); return; }
+    const scratch = makeScratch("gov-page");
+    const container = document.createElement("div");
+    container.id = "gov-report";
+    document.body.appendChild(container);
+    try {
+      const pdf = await buildXlsxStylePdf(scratch, container);
+      pdf.save(`חישוב ציון (מבנה Excel) - ${state.name || state.number || "ללא שם"}.pdf`);
+    } finally {
+      scratch.remove();
+      container.remove();
+    }
+  }
+
   // --- ת.ז: כותרת פשוטה (עמוד N מתוך M + כותרת הטופס), A4 לאורך ---
   function idCardHeaderHTML(pageNum, totalPages) {
     return `<div class="idcard-head">
@@ -817,5 +898,5 @@ const PdfExport = (() => {
     }
   }
 
-  return { exportReport, exportSummary, exportCalculation, exportIdCard, exportZip };
+  return { exportReport, exportSummary, exportCalculation, exportCalculationXlsxStyle, exportIdCard, exportZip };
 })();
