@@ -405,7 +405,11 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
 .xlsx-pdf-panel {
   background: #ccffff; border: 1px solid #666; border-top: none; padding: 6px 10px;
 }
-.xlsx-pdf-panel-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 4px 0; }
+/* direction:ltr — התוכן הוא שרשרת נוסחה (תווית = נוסחה = ערך) שנקראת
+   משמאל לימין; בלי זה ה-flex יורש RTL מהעמוד והופך את סדר התצוגה (ערך
+   בצד שמאל, תווית בצד ימין — הפוך לסדר הקריאה הטבעי), וגם דוחף את כל
+   השורה שמאלה במקום שתיצמד לימין כמו שאר הפאנל */
+.xlsx-pdf-panel-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 4px 0; direction: ltr; }
 .xlsx-pdf-box { background: #fff; border: 1px solid #666; padding: 2px 10px; border-radius: 2px; }
 .xlsx-pdf-label { color: #d00; font-weight: bold; }
 .xlsx-pdf-value { color: #000; font-weight: bold; font-size: 13px; min-width: 50px; text-align: center; }
@@ -456,8 +460,10 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
    מינימלי יחסי לשאר עמודות הטבלה כדי שייראו פרופורציונליות ולא דחוסות */
 .gov-table th.gov-col-s, .gov-table th.gov-col-ex { width: 6%; text-align: center; }
 .gov-table td.gov-col-s, .gov-table td.gov-col-ex { text-align: center; }
-/* שורה אחת לכל שדה (כמו במקור) — עמודת התווית ברוחב קבוע, הערך תופס את השאר */
-.gov-kv th { font-weight: 400; width: 230px; white-space: nowrap; }
+/* שורה אחת לכל שדה (כמו במקור) — עמודת התווית ברוחב קבוע, הערך תופס את השאר.
+   180px הוא הרוחב המינימלי הבטוח — נמדד בפועל שהתווית הארוכה ביותר ("04.01
+   מספר מפתחים / יחידות") צריכה 172px כדי לא להישבר לשורה שנייה */
+.gov-kv th { font-weight: 400; width: 180px; white-space: nowrap; }
 .gov-kv-cpi { font-weight: 700; }
 /* flex:0 0 auto + align-items:flex-start — קריטי: בלעדיהם המעטפת יורשת
    flex:1 1 auto מהעמוד (טור אנכי) ונמתחת לכל הגובה הפנוי, ואיתה כל שורות
@@ -465,8 +471,10 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
    וגרם לשורות ענקיות במקום השורות הצפופות שבמקור */
 .gov-general-wrap { display: flex; gap: 8px; align-items: flex-start; flex: 0 0 auto; }
 .gov-general-wrap .gov-kv { flex: 1 1 auto; }
+/* 355x437 שומר על יחס התמונה המקורי (260:320) כשהגובה נקבע כך שהמסגרת
+   התחתונה תתיישר בדיוק עם תחתית שורת CPI Critical בטבלה הסמוכה */
 .gov-general-photo {
-  flex: 0 0 260px; height: 320px; border: 1px solid #000; display: flex;
+  flex: 0 0 355px; height: 437px; border: 1px solid #000; display: flex;
   align-items: center; justify-content: center; overflow: hidden;
 }
 .gov-general-photo img { width: 100%; height: 100%; object-fit: contain; }
