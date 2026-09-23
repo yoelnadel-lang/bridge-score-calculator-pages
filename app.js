@@ -592,6 +592,24 @@ function buildEngineInput() {
     })),
   };
 }
+// רכיבים שפגם מהותי בהם הוא סכנה למשתמשי הדרך (מעקות בטיחות, ציפוי מיסעה
+// וכו') — לפי הקבוצה "רכיבי בטיחות" בקטלוג. רכיב בלי catalogId (למשל טעינת
+// BR-11) מזוהה לפי שם, בהשוואה בלי רווחים לשמות הקטלוג באותה קבוצה
+function safetyComponentKeys(st) {
+  const catalog = COMPONENT_CATALOGS[st.structureClass] || [];
+  const safetyDefs = catalog.filter((c) => c.group === "רכיבי בטיחות");
+  const ids = new Set(safetyDefs.map((c) => String(c.id)));
+  const norm = (s) => String(s || "").replace(/\s+/g, "");
+  const names = new Set(safetyDefs.map((c) => norm(c.name)));
+  const keys = new Set();
+  for (const span of st.spans) {
+    for (const c of span.components) {
+      const hit = c.catalogId != null ? ids.has(String(c.catalogId)) : names.has(norm(c.name));
+      if (hit) keys.add(c.uid);
+    }
+  }
+  return keys;
+}
 function hasAnyComponents() {
   return state.spans.some((s) => s.components.length);
 }
@@ -725,11 +743,15 @@ function update() {
 
   // חישוב אחד לכל update() — גם ל"ת.ז", גם ל"תוצאות" וגם ל"תקציר מנהלים".
   // בגשר בסדר גודל BR-11 (150 פגמים) חישוב כפול הורגש בהקלדה רציפה.
-  let result = null, summary = null;
+  // תוכנית השיפור (חישוב "מה אם" לכל קבוצת טיפול) יקרה — רק כשהתקציר גלוי
+  let result = null, summary = null, plan = null;
   if (hasAnyComponents()) {
     const input = buildEngineInput();
     result = Calc.computeStructure(input);
     summary = Calc.executiveSummary(input, result);
+    if (ui.activeTab === "summary" && summary.totalScored) {
+      plan = Calc.improvementPlan(input, result, summary, { safetyKeys: safetyComponentKeys(state) });
+    }
   }
 
   document.getElementById("idcard-tabs").innerHTML = renderIdCardTabs(ui.idCardTab);
@@ -747,7 +769,7 @@ function update() {
   document.getElementById("structure-survey").innerHTML = renderStructureSurvey(state, ui, photoStore);
 
   document.getElementById("results").innerHTML = renderResults(state, result);
-  document.getElementById("summary").innerHTML = renderSummary(state, result, summary);
+  document.getElementById("summary").innerHTML = renderSummary(state, result, summary, plan);
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 
@@ -1315,6 +1337,15 @@ function init() {
   // דוח מודפס של פאנל מקופל היה יוצא כותרת בלי תוכן.
   let reopenAfterPrint = [];
   window.addEventListener("beforeprint", () => {
+    // בהדפסה כל הפאנלים מוצגים — גם התקציר, שבמסך מחשב את תוכנית השיפור
+    // רק כשהלשונית שלו פעילה
+    if (hasAnyComponents() && ui.activeTab !== "summary") {
+      const input = buildEngineInput();
+      const result = Calc.computeStructure(input);
+      const summary = Calc.executiveSummary(input, result);
+      const plan = summary.totalScored ? Calc.improvementPlan(input, result, summary, { safetyKeys: safetyComponentKeys(state) }) : null;
+      document.getElementById("summary").innerHTML = renderSummary(state, result, summary, plan);
+    }
     reopenAfterPrint = [...document.querySelectorAll(".panel:not([open])")];
     for (const p of reopenAfterPrint) p.open = true;
   });

@@ -634,37 +634,102 @@ const PdfExport = (() => {
     }
   }
 
+  // שורת תחתית לעמוד בתקציר המנהלים: קו מפריד, ההסתייגות (SUMMARY_DISCLAIMER)
+  // מימין ומספר העמוד משמאל. נכתבת ישירות על קנבס העמוד (לא כחלק מהזרימה),
+  // כך שהיא בתחתית כל עמוד בדיוק, ובגודל קבוע גם כשהתוכן הוקטן
+  function drawSummaryFooter(ctx, pageNo, total) {
+    const S = SCALE, pad = 32 * S, y = (PORTRAIT_H_PX - 22) * S;
+    ctx.save();
+    ctx.strokeStyle = "#c9ced3"; ctx.lineWidth = S;
+    ctx.beginPath(); ctx.moveTo(pad, y - 14 * S); ctx.lineTo(PORTRAIT_W_PX * S - pad, y - 14 * S); ctx.stroke();
+    ctx.fillStyle = "#57606a";
+    ctx.font = `${10.5 * S}px "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif`;
+    ctx.direction = "rtl"; ctx.textAlign = "right";
+    ctx.fillText(SUMMARY_DISCLAIMER, PORTRAIT_W_PX * S - pad, y);
+    ctx.direction = "rtl"; ctx.textAlign = "left";
+    ctx.fillText(`עמוד ${pageNo} מתוך ${total}`, pad, y);
+    ctx.restore();
+  }
+
   // --- ייצוא "תקציר מנהלים": מסמך נפרד, לאורך — מדי מהירות + רכיב קריטי ---
   async function exportSummary() {
     if (!hasAnyComponents()) { alert("אין נתונים לייצוא — הוסף רכיבים תחילה."); return; }
     const input = buildEngineInput();
     const result = Calc.computeStructure(input);
     const summary = Calc.executiveSummary(input, result);
+    const plan = summary.totalScored ? Calc.improvementPlan(input, result, summary, { safetyKeys: safetyComponentKeys(state) }) : null;
     const el = document.createElement("div");
     el.id = "pdf-summary";
+    // לוגואים כמו בעמוד הראשון של דוח הסקירה: החברה מימין, המזמין משמאל
+    // (תיבה ריקה כשאין לוגו למזמין, כדי שהכותרת תישאר ממורכזת)
+    const clientLogos = (state.clientLogos || []).map((url) =>
+      `<div class="gov-logo-box"><img src="${esc(url)}"></div>`).join("");
     el.innerHTML = `
-      <h1>תקציר מנהלים — Condition PI</h1>
+      <div class="summary-title-row">
+        <div class="gov-logo-box"><img src="logo.jpeg"></div>
+        <h1>תקציר מנהלים</h1>
+        <div class="gov-logo-group">${clientLogos || '<div class="gov-logo-box"></div>'}</div>
+      </div>
       <p class="pdf-sub">${esc(state.name || "ללא שם")}${state.number ? ` · <span dir="ltr">${esc(state.number)}</span>` : ""}
         · הופק בתאריך ${fmtDateDMY(new Date())}</p>
-      ${renderSummary(state, result, summary)}`;
+      ${renderSummary(state, result, summary, plan)}`;
+    // ההסתייגות מודפסת כשורת תחתית בכל עמוד (ר' drawFooter) ולא בסוף הזרימה
+    const inlineDisclaimer = el.querySelector(".summary-disclaimer");
+    if (inlineDisclaimer) inlineDisclaimer.remove();
     document.body.appendChild(el);
     try {
       await decodeImages(el);
       fitImages(el);
+      // נקודות חיתוך מותרות: תחתית כל בלוק ברמה העליונה וכל שורת טבלה — כך
+      // שמעבר עמוד לעולם לא חוצה שורה/פסקה/מד. כותרות ושורות כותרת של טבלה
+      // אינן נקודת חיתוך, כדי שלא יישארו לבד בתחתית עמוד.
+      // f = מקדם הקטנה: התקציר מוגבל ל-2 עמודים; אם התוכן ארוך יותר, מרחיבים
+      // את המיכל (התוכן זורם לרוחב ומתקצר) ומקטינים את התמונה בחזרה לרוחב
+      // העמוד — הקטנה אחידה של הכל, עד 60% לכל היותר
+      // FOOTER = גובה שורת התחתית (הסתייגות + מספר עמוד), בפיקסלים של העמוד —
+      // לא מוקטנת עם f, כדי שתישאר קריאה גם כשהתוכן הוקטן
+      const MAX_PAGES = 2, MARGIN = 28, FOOTER = 34;
+      const layout = (f) => {
+        const top = el.getBoundingClientRect().top;
+        const breaks = [...el.querySelectorAll(":scope > *, .summary-block > *, tr")]
+          .filter((n) => !/^H[1-4]$/.test(n.tagName) && !(n.tagName === "TR" && n.querySelector("th")))
+          .map((n) => n.getBoundingClientRect().bottom - top)
+          .sort((x, y) => x - y);
+        // סוף התוכן בפועל (תחתית הבלוק האחרון), לא גובה המיכל — אחרת הריפוד
+        // התחתון של המיכל לבדו יוצר עמוד ריק נוסף בסוף המסמך
+        const totalH = breaks.length ? breaks[breaks.length - 1] : el.getBoundingClientRect().height;
+        const pageH = PORTRAIT_H_PX / f, margin = MARGIN / f, footer = FOOTER / f;
+        const slices = [];
+        for (let start = 0; start < totalH - 1;) {
+          const room = pageH - footer - (slices.length ? margin : 0);
+          const fits = breaks.filter((y) => y > start + 1 && y <= start + room);
+          const end = Math.min(totalH, fits.length ? fits[fits.length - 1] : start + room);
+          slices.push([start, end]);
+          start = end;
+        }
+        return slices;
+      };
+      let f = 1;
+      let slices = layout(f);
+      while (slices.length > MAX_PAGES && f > 0.605) {
+        f = Math.round((f - 0.05) * 100) / 100;
+        el.style.width = Math.round(PORTRAIT_W_PX / f) + "px";
+        slices = layout(f);
+      }
       const canvas = await html2canvas(el, { scale: SCALE, backgroundColor: "#ffffff" });
       const pdf = new jspdf.jsPDF("p", "mm", "a4");
-      const pageHc = PORTRAIT_H_PX * SCALE;
-      const pages = Math.max(1, Math.ceil(canvas.height / pageHc));
-      for (let p = 0; p < pages; p++) {
-        const sliceH = Math.min(pageHc, canvas.height - p * pageHc);
-        const slice = document.createElement("canvas");
-        slice.width = canvas.width; slice.height = pageHc;
-        const ctx = slice.getContext("2d");
-        ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, slice.width, slice.height);
-        ctx.drawImage(canvas, 0, p * pageHc, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+      const pageW = PORTRAIT_W_PX * SCALE;
+      slices.forEach(([y0, y1], p) => {
+        const page = document.createElement("canvas");
+        page.width = pageW; page.height = PORTRAIT_H_PX * SCALE;
+        const ctx = page.getContext("2d");
+        ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, page.width, page.height);
+        const sy = Math.round(y0 * SCALE), sh = Math.round((y1 - y0) * SCALE);
+        ctx.drawImage(canvas, 0, sy, canvas.width, sh, 0, p ? MARGIN * SCALE : 0, pageW, Math.round(sh * f));
+        drawSummaryFooter(ctx, p + 1, slices.length);
         if (p) pdf.addPage();
-        pdf.addImage(slice.toDataURL("image/jpeg", JPEG_QUALITY), "JPEG", 0, 0, PORTRAIT_W_MM, PORTRAIT_H_MM);
-      }
+        pdf.addImage(page.toDataURL("image/jpeg", JPEG_QUALITY), "JPEG", 0, 0, PORTRAIT_W_MM, PORTRAIT_H_MM);
+      });
       pdf.save(`תקציר מנהלים - ${state.name || state.number || "ללא שם"}.pdf`);
     } finally {
       el.remove();
@@ -746,7 +811,7 @@ const PdfExport = (() => {
     const sections = buildXlsxStyleSections(state, result);
 
     const probe = document.createElement("div");
-    probe.className = "gov-page";
+    probe.className = "gov-page xlsx-calc-page";
     probe.innerHTML = govHeaderHTML(state, 1, 99) + '<div class="gov-section-title">מדידה</div>';
     scratch.appendChild(probe);
     const headerH = probe.querySelector(".gov-head").getBoundingClientRect().height;
@@ -762,7 +827,7 @@ const PdfExport = (() => {
     const pdf = new jspdf.jsPDF("l", "mm", "a4");
     for (let i = 0; i < total; i++) {
       const pageEl = document.createElement("div");
-      pageEl.className = "gov-page";
+      pageEl.className = "gov-page xlsx-calc-page";
       pageEl.innerHTML = govHeaderHTML(state, i + 1, total) + pageBodies[i];
       container.appendChild(pageEl);
       await decodeImages(pageEl);

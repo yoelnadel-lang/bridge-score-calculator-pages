@@ -194,8 +194,48 @@
       if (ranked.length) weakestSpan = { id: ranked[0].id, cpiAv: ranked[0].unit.cpiAv };
     }
 
+    // כל הרכיבים שקובעים בפועל את SCScrit — לרוב כמה רכיבים (ובכמה מפתחים)
+    // חולקים את אותו Eci מרבי, ו-criticalComp לבדו מציג רק את הראשון מהם
+    const scsCrit = result.bridge.scsCrit;
+    const criticalTies = scsCrit == null ? [] : scored.filter((c) =>
+      c.importance === "veryHigh" && Math.abs(c.eci - scsCrit) < EPS);
+
+    // תרומת כל רכיב להורדת SCSav מ-1 (משוואות 6.1/6.2): w·(Eci−1)·Eif/ΣEif,
+    // כש-w הוא משקל המפתח (מימד/Σמימד) במבנה של 3+ מפתחים, או 1 ביחידה
+    // אחת. סכום כל התרומות שווה בדיוק ל-SCSav−1
+    const avContributions = [];
+    const addUnit = (comps, spanId, w) => {
+      const sc = comps.filter((c) => c.surveyed && !c.aux && c.eci != null);
+      const sumEif = sc.reduce((a, c) => a + c.eif, 0);
+      if (!sumEif) return;
+      for (const c of sc) {
+        const contribution = (w * (c.eci - 1) * c.eif) / sumEif;
+        if (contribution > EPS) avContributions.push({ comp: c, spanId: spanId(c), contribution });
+      }
+    };
+    if (result.singleUnit) {
+      addUnit(allComps, (c) => c.spanId, 1);
+    } else {
+      const withScore = result.spans.filter((s) => s.unit.scsAv != null && s.dim > 0);
+      const sumDim = withScore.reduce((a, s) => a + s.dim, 0);
+      for (const s of withScore) {
+        addUnit(allComps.filter((c) => c.spanId === s.id), () => s.id, s.dim / sumDim);
+      }
+    }
+
+    // פגמים לטיפול: כל פגם בחומרה 3 ומעלה ברכיב שנסקר (כולל רכיבי עזר —
+    // אינם משפיעים על הציון אך עדיין דורשים טיפול)
+    const treatments = allComps.filter((c) => c.surveyed).flatMap((c) =>
+      (c.defects || []).filter((d) => d.s >= 3).map((d) => ({ comp: c, defect: d })));
+    const minorCount = allComps.filter((c) => c.surveyed &&
+      (c.defects || []).some((d) => d.s === 2) && !(c.defects || []).some((d) => d.s >= 3)).length;
+
     return {
       criticalComp,
+      criticalTies,
+      avContributions,
+      treatments,
+      minorCount,
       worstComponents: worst,
       distribution: dist,
       totalScored: scored.length,
@@ -209,5 +249,173 @@
     };
   }
 
-  return { cpi, meaning, validateDefect, computeComponent, computeUnit, computeStructure, executiveSummary };
+  // ============================================================================
+  // "מה אם" — ציון המבנה לאחר תיקון פגמים (הנחיות לביצוע סקירה, סעיף 2.6.6:
+  // אומדן CPI העתידי הצפוי לאחר ביצוע הטיפולים המומלצים). פגם שתוקן מוסר,
+  // והרכיב מחושב מחדש לפי שאר הפגמים שלו (או 1A אם לא נותרו) — אותו מנוע
+  // בדיוק, בלי נוסחה נפרדת. removeSet מזהה פגמים לפי הפניית אובייקט: ה-
+  // defects בתוצאת computeComponent הם אותם אובייקטים שב-input.
+  // ============================================================================
+  function scoreAfter(input, removeSet) {
+    const r = computeStructure({
+      ...input,
+      spans: input.spans.map((s) => ({ ...s, defects: (s.defects || []).filter((d) => !removeSet.has(d)) })),
+    });
+    return {
+      cpiAv: r.bridge.method_norm.cpiAv, cpiCrit: r.bridge.cpiCrit,
+      meaningAv: r.bridge.meaningAv, meaningCrit: r.bridge.meaningCrit,
+    };
+  }
+
+  // ציון היעד שכל מבנה אמור להגיע אליו — כלל עבודה פנימי של המשתמש, לא
+  // מופיע בנוהל ולא מודפס בתקציר; קובע אילו פגמים חייבים להיכלל בו
+  const TARGETS = { cpiAv: 92, cpiCrit: 81 };
+  // היפוך משוואת ה-CPI: SCS שבו CPI שווה בדיוק ליעד (81 → 2.0, 92 → 1.447)
+  function scsForCpi(target) {
+    const c = (100 - target) / 2 + 7.5;              // SCS² + 6.5·SCS = c
+    return (-6.5 + Math.sqrt(42.25 + 4 * c)) / 2;
+  }
+
+  // הפגמים שחייבים לתקן כדי שהמבנה יגיע ליעד. שני שלבים:
+  // (1) קריטי: כל רכיב בחשיבות "גבוהה מאוד" עם Eci מעל ה-SCS של היעד —
+  //     מסירים ממנו פגם אחד בכל פעם (החומרה המרבית, ההיקף הגדול ביותר)
+  //     עד שהוא יורד אל היעד. ב-81 זה Eci ≤ 2.0, כך שגם חומרה 2 בהיקף C
+  //     ומעלה (Eci 2.1) נכללת.
+  // (2) ממוצע: SCSav הוא ממוצע משוקלל, ולכן אין רכיב יחיד ש"מונע" את היעד;
+  //     בוחרים בכל צעד את הרכיב שתיקון החומרה המרבית שלו מוריד את SCSav הכי
+  //     הרבה (w·ΔEci·Eif/ΣEif — אנליטי, בלי חישוב מבנה מלא), עד שמגיעים ליעד.
+  // המנוע עובד ברמת רכיב בודד (computeComponent); הציון הסופי מאומת בחישוב מלא.
+  function targetPlan(input, result, targets) {
+    const T = targets || TARGETS;
+    const tCrit = scsForCpi(T.cpiCrit), tAv = scsForCpi(T.cpiAv);
+    const removed = new Set();
+    const reasons = new Map();                        // defect → "crit" | "av"
+    const units = [];
+    const entries = [];
+    const addUnit = (spanIdxs, w) => {
+      const unit = { w, sumEif: 0 };
+      for (const i of spanIdxs) {
+        const span = input.spans[i];
+        for (const comp of span.components || []) {
+          const defects = (span.defects || []).filter((d) => d.compKey === comp.key);
+          const e = { comp, defects, unit, res: computeComponent(comp, defects) };
+          entries.push(e);
+          if (e.res.surveyed && !e.res.aux && e.res.eci != null) unit.sumEif += e.res.eif;
+        }
+      }
+      units.push(unit);
+    };
+    if (result.singleUnit) {
+      addUnit(input.spans.map((_, i) => i), 1);
+    } else {
+      const counted = result.spans.map((s, i) => ({ s, i })).filter(({ s }) => s.unit.scsAv != null && s.dim > 0);
+      const sumDim = counted.reduce((a, { s }) => a + s.dim, 0);
+      const countedIdx = new Set(counted.map(({ i }) => i));
+      input.spans.forEach((_, i) => addUnit([i], countedIdx.has(i) && sumDim ? result.spans[i].dim / sumDim : 0));
+    }
+    const scored = (e) => e.res.surveyed && !e.res.aux && e.res.eci != null;
+    const live = (e) => e.defects.filter((d) => !removed.has(d));
+    const recompute = (e) => { e.res = computeComponent(e.comp, live(e)); };
+    const exVal = (d) => (EXTENT[d.ex] ? EXTENT[d.ex].value : 0);
+
+    for (const e of entries) {
+      if (!scored(e) || e.comp.importance !== "veryHigh") continue;
+      for (let guard = 0; e.res.eci > tCrit + EPS && guard < 200; guard++) {
+        const top = live(e).filter((d) => d.s === e.res.sMax).sort((a, b) => exVal(b) - exVal(a))[0];
+        if (!top) break;
+        removed.add(top); reasons.set(top, "crit");
+        recompute(e);
+      }
+    }
+
+    const scsAvNow = () => units.reduce((a, u) => a + (u.sumEif && u.w
+      ? u.w * entries.filter((e) => e.unit === u && scored(e)).reduce((s, e) => s + e.res.eci * e.res.eif, 0) / u.sumEif
+      : 0), 0);
+    if (result.bridge.method_norm.cpiAv != null) {
+      let scs = scsAvNow();
+      for (let guard = 0; scs > tAv + EPS && guard < 1000; guard++) {
+        let best = null;
+        for (const e of entries) {
+          if (!scored(e) || e.res.eci <= 1 + EPS || !e.unit.w || !e.unit.sumEif) continue;
+          const drop = live(e).filter((d) => d.s === e.res.sMax);
+          if (!drop.length) continue;
+          const after = computeComponent(e.comp, live(e).filter((d) => !drop.includes(d)));
+          const delta = (e.unit.w * (e.res.eci - after.eci) * e.res.eif) / e.unit.sumEif;
+          if (delta > EPS && (!best || delta > best.delta)) best = { e, drop, delta };
+        }
+        if (!best) break;
+        for (const d of best.drop) { removed.add(d); if (!reasons.has(d)) reasons.set(d, "av"); }
+        recompute(best.e);
+        scs -= best.delta;
+      }
+    }
+
+    const after = scoreAfter(input, removed);
+    return {
+      removed, reasons, after,
+      reachedCrit: after.cpiCrit == null || after.cpiCrit >= T.cpiCrit - 1e-6,
+      reachedAv: after.cpiAv == null || after.cpiAv >= T.cpiAv - 1e-6,
+    };
+  }
+
+  // תוכנית הטיפול לתקציר המנהלים: הפגמים שנדרשים להגעה ליעד (targetPlan),
+  // ובנוסף — בלי קשר ליעד — כל פגם מהותי (S≥3) ברכיב בטיחות וכל פגם חמור
+  // (S≥4). יקר יחסית, ולכן נפרד מ-executiveSummary שרץ בכל עדכון מסך.
+  // safetyKeys: מפתחות "רכיבי בטיחות" (נקבע בשכבת האפליקציה לפי הקטלוג)
+  function improvementPlan(input, result, summary, opts) {
+    const safetyKeys = (opts && opts.safetyKeys) || new Set();
+    const current = {
+      cpiAv: result.bridge.method_norm.cpiAv, cpiCrit: result.bridge.cpiCrit,
+      meaningAv: result.bridge.meaningAv, meaningCrit: result.bridge.meaningCrit,
+    };
+    const tp = targetPlan(input, result, opts && opts.targets);
+
+    const compByKey = new Map(result.spans.flatMap((s) => s.comps.map((c) => [c.key, { ...c, spanId: s.id }])));
+    const include = new Set(tp.removed);
+    for (const [key, c] of compByKey) {
+      if (!c.surveyed) continue;
+      for (const d of c.defects || []) {
+        if (d.s >= 4 || (d.s >= 3 && safetyKeys.has(key))) include.add(d);
+      }
+    }
+
+    const groups = new Map();
+    for (const d of include) {
+      const comp = compByKey.get(d.compKey);
+      if (!comp) continue;
+      const isSafety = safetyKeys.has(comp.key);
+      // שורה אחת לכל סוג פגם (כיוון הטיפול תלוי בסוג הפגם בלבד); s = החומרה
+      // המרבית בשורה, sMin — לתצוגת טווח. רכיבי בטיחות בשורה נפרדת כדי
+      // שיוקדמו בסדר העדיפויות
+      const key = `${d.def || ""}|${isSafety}`;
+      if (!groups.has(key)) groups.set(key, { def: d.def, s: d.s, sMin: d.s, isSafety, items: [], defects: new Set() });
+      const g = groups.get(key);
+      g.s = Math.max(g.s, d.s); g.sMin = Math.min(g.sMin, d.s);
+      g.items.push({ comp, spanId: comp.spanId, ex: d.ex });
+      g.defects.add(d);
+    }
+    const gain = (after, k) => (after[k] != null && current[k] != null ? after[k] - current[k] : 0);
+    const list = [...groups.values()].map((g) => {
+      const alone = scoreAfter(input, g.defects);
+      return { ...g, gainAv: gain(alone, "cpiAv"), gainCrit: gain(alone, "cpiCrit") };
+    });
+    list.sort((a, b) => (b.isSafety - a.isSafety) || (b.s - a.s) ||
+      (b.gainCrit - a.gainCrit) || (b.gainAv - a.gainAv));
+    // ציון מצטבר: לאחר תיקון השורה הזו וכל השורות שמעליה
+    const cumulative = new Set();
+    for (const g of list) {
+      for (const d of g.defects) cumulative.add(d);
+      g.after = scoreAfter(input, cumulative);
+    }
+
+    const allDefects = [...compByKey.values()].filter((c) => c.surveyed).flatMap((c) => c.defects || []);
+    const otherCount = allDefects.filter((d) => d.s >= 2 && !include.has(d)).length;
+
+    return {
+      current, groups: list, allFix: list.length ? list[list.length - 1].after : null,
+      reachedCrit: tp.reachedCrit, reachedAv: tp.reachedAv, otherCount,
+    };
+  }
+
+  return { cpi, meaning, validateDefect, computeComponent, computeUnit, computeStructure, executiveSummary, scoreAfter, scsForCpi, targetPlan, improvementPlan };
 });

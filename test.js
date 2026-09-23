@@ -181,5 +181,31 @@ checkTrue("תקציר: רכיב קריטי זוהה", !!summary.criticalComp);
 checkTrue("תקציר: יש רכיבים גרועים", summary.worstComponents.length > 0);
 checkTrue("תקציר: מפתח חלש זוהה", !!summary.weakestSpan);
 
+// "מה אם" — ציון לאחר תיקון
+const noneFixed = Calc.scoreAfter(bridgeInput, new Set());
+check("מה אם: בלי תיקונים CPIav זהה", noneFixed.cpiAv, bridgeRes.bridge.method_norm.cpiAv, 1e-9);
+check("מה אם: בלי תיקונים CPIcrit זהה", noneFixed.cpiCrit, bridgeRes.bridge.cpiCrit, 1e-9);
+const allDefects = new Set(bridgeInput.spans.flatMap((s) => s.defects));
+const allFixed = Calc.scoreAfter(bridgeInput, allDefects);
+check("מה אם: תיקון כל הפגמים → CPIav 100", allFixed.cpiAv, 100, 1e-9);
+check("מה אם: תיקון כל הפגמים → CPIcrit 100", allFixed.cpiCrit, 100, 1e-9);
+const plan = Calc.improvementPlan(bridgeInput, bridgeRes, summary, { safetyKeys: new Set() });
+checkTrue("מה אם: יש קבוצות טיפול", plan.groups.length > 0);
+checkTrue("מה אם: ציון מצטבר לא יורד משורה לשורה", plan.groups.every((g, i) => i === 0 ||
+  (g.after.cpiAv >= plan.groups[i - 1].after.cpiAv - 1e-9 && g.after.cpiCrit >= plan.groups[i - 1].after.cpiCrit - 1e-9)));
+check("יעד: SCS לקריטי 81 = 2.0", Calc.scsForCpi(81), 2.0, 1e-9);
+check("יעד: CPI(SCS של 92) = 92", Calc.cpi(Calc.scsForCpi(92)), 92, 1e-9);
+const tp = Calc.targetPlan(bridgeInput, bridgeRes);
+checkTrue("יעד: BR-11 מגיע ל-CPIcrit ≥ 81 אחרי התיקונים", tp.reachedCrit && tp.after.cpiCrit >= 81 - 1e-6);
+checkTrue("יעד: BR-11 מגיע ל-CPIav ≥ 92 אחרי התיקונים", tp.reachedAv && tp.after.cpiAv >= 92 - 1e-6);
+checkTrue("יעד: לא מתקנים הכל — נשארים פגמים שאינם נדרשים", tp.removed.size < allDefects.size);
+checkTrue("יעד: הציון הסופי בטבלת התקציר מגיע ליעד", plan.allFix.cpiCrit >= 81 - 1e-6 && plan.allFix.cpiAv >= 92 - 1e-6);
+const cleanInput = { ...bridgeInput, spans: bridgeInput.spans.map((s) => ({ ...s, defects: [] })) };
+const perfect = Calc.targetPlan(cleanInput, Calc.computeStructure(cleanInput));
+checkTrue("יעד: מבנה תקין — אין מה לתקן", perfect.removed.size === 0);
+checkTrue("מה אם: תיקון רכיב קובע אחד בלבד לא משנה CPIcrit (9 רכיבים שווים ב-BR-11)",
+  summary.criticalTies.length > 1 && Math.abs(Calc.scoreAfter(bridgeInput,
+    new Set(summary.criticalTies[0].defects.filter((d) => d.s === summary.criticalTies[0].sMax))).cpiCrit - bridgeRes.bridge.cpiCrit) < 1e-9);
+
 console.log(`\n=== סה"כ: ${pass} עברו, ${fail} נכשלו ===`);
 process.exit(fail ? 1 : 0);

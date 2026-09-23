@@ -346,6 +346,35 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 .summary-block th, .summary-block td { border: 1px solid var(--border); padding: 5px 9px; text-align: right; }
 .summary-block th { background: var(--bg); }
 .summary-name { font-size: 1.15rem; font-weight: 800; margin: 4px 0; }
+.summary-meta { margin: 0 0 6px; color: #57606a; font-size: .88rem; }
+.summary-block h4 { font-size: .92rem; margin: 12px 0 4px; }
+.summary-table { margin: 6px 0 8px; }
+.summary-table th { white-space: nowrap; }
+.summary-num { text-align: center !important; white-space: nowrap; }
+.summary-sub { font-size: .78rem; color: #57606a; margin-top: 2px; }
+.summary-sub-inline { font-size: .78rem; color: #57606a; }
+.summary-treat td:first-child { white-space: nowrap; font-weight: 700; text-align: center; }
+.summary-prio-5 td:first-child { background: #ffd7d5; color: #a40e26; }
+.summary-prio-4 td:first-child { background: #ffe3cc; color: #9a4b00; }
+.summary-prio-3 td:first-child { background: #fff4c2; color: #7d5a00; }
+.summary-prio-2 td:first-child { background: #eef1f4; color: #57606a; }
+.summary-disclaimer { margin-top: 14px; }
+.summary-treat { table-layout: fixed; }
+.summary-treat .st-prio { width: 10%; }
+.summary-treat .st-def { width: 18%; }
+.summary-treat .st-where { width: 21%; }
+.summary-treat .st-after { width: 21%; }
+.summary-treat th { white-space: normal; text-align: center; vertical-align: middle; }
+.summary-treat td:last-child { text-align: center; vertical-align: middle; }
+.summary-prio-safety td:first-child { background: #ffd7d5; color: #a40e26; }
+.summary-safety-tag { font-size: .7rem; font-weight: 700; white-space: normal; margin-top: 3px; }
+.summary-chg { font-size: .78rem; overflow-wrap: anywhere; }
+.summary-nochange { color: #8c959f; }
+.summary-whatif { background: #eef7ee; border-inline-start: 4px solid #1a7f37; padding: 6px 10px; margin: 8px 0; }
+.summary-attention { border: 2px solid #b00020; padding: 6px 10px; margin: 8px 0 4px; }
+.summary-attention-title { color: #b00020; font-weight: 700; margin-bottom: 2px; }
+.summary-attention-text { white-space: pre-wrap; }
+.gauge-of { font-size: .9rem; font-weight: 600; color: #57606a; }
 .defect-narrative { margin: 6px 0 0; }
 .defect-narrative p { line-height: 1.6; margin: 0 0 8px; text-align: justify; }
 .defect-note-quote { font-style: italic; color: #444; border-inline-start: 3px solid var(--border); padding-inline-start: 8px; }
@@ -371,6 +400,10 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
   font-family: "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif; color: var(--text);
 }
 #pdf-summary h1 { font-size: 1.4rem; color: var(--primary); margin: 0 0 4px; }
+/* שורת כותרת עם לוגואים, כמו בעמוד הראשון של דוח הסקירה: לוגו החברה מימין,
+   לוגואי המזמין משמאל, הכותרת במרכז */
+#pdf-summary .summary-title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+#pdf-summary .summary-title-row h1 { flex: 1 1 auto; text-align: center; margin: 0; }
 #pdf-summary .pdf-sub { margin: 0 0 14px; color: #57606a; font-size: .9rem; }
 
 /* ייצוא "חישוב ציון" PDF — קונטיינר מחוץ למסך ברוחב A4 לרוחב (טבלאות
@@ -387,32 +420,35 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
 /* ייצוא "חישוב ציון — במבנה קובץ ה-Excel" PDF — אותה טבלת נתונים כמו
    ב-XlsxExport (ראו render.js: buildXlsxStyleSections), כערכים סטטיים.
    מוצג בתוך עמודי .gov-page רגילים (כותרת+לוגואים+מספור עמוד חוזרים,
-   פיצול אמיתי לפי גובה שורות) — לא מיכל נפרד */
-.xlsx-pdf-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 6px; }
+   פיצול אמיתי לפי גובה שורות) — לא מיכל נפרד.
+   שחור-לבן: בלי מילוי צבעוני בתאים ובתיבות, וכל הטקסט בשחור; ההדגשות
+   נשמרות. התא של המפתח עם SCScrit המרבי (שבמקור צבוע כחול) מודגש במקום
+   הצבע, כדי שהמידע לא ילך לאיבוד */
+.xlsx-pdf-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 6px; color: #000; }
 .xlsx-pdf-table th, .xlsx-pdf-table td { border: 1px solid #999; padding: 2px 4px; text-align: center; }
-.xlsx-pdf-table th { background: #c0c0c0; font-weight: bold; }
+.xlsx-pdf-table th { font-weight: bold; }
 .xlsx-pdf-table td.xr { text-align: right; }
-.xlsx-pdf-table td.xin { background: #ffff99; }
-.xlsx-pdf-table td.xinfo { background: #ccffff; }
-.xlsx-pdf-table td.xmax { background: #8db4e2; }
+.xlsx-pdf-table td.xmax { font-weight: bold; }
 
-/* פאנל תוצאה (SCSav/SCScrit/Condition PI) — כותרת אפורה+טקסט אדום, גוף
-   ציאן, תווית אדומה בתיבה לבנה, ערך שחור מודגש בתיבה לבנה — כמו במקור */
+/* פאנל תוצאה (SCSav/SCScrit/Condition PI) — מסגרות בלבד, בלי מילוי;
+   הכותרת, התוויות והערכים מודגשים */
 .xlsx-pdf-banner {
-  background: #c0c0c0; color: #d00; font-weight: bold; text-align: center;
+  color: #000; font-weight: bold; text-align: center;
   padding: 3px; border: 1px solid #666; font-size: 11px; margin-top: 10px;
 }
 .xlsx-pdf-panel {
-  background: #ccffff; border: 1px solid #666; border-top: none; padding: 6px 10px;
+  color: #000; border: 1px solid #666; border-top: none; padding: 6px 10px;
 }
 /* direction:ltr — התוכן הוא שרשרת נוסחה (תווית = נוסחה = ערך) שנקראת
    משמאל לימין; בלי זה ה-flex יורש RTL מהעמוד והופך את סדר התצוגה (ערך
    בצד שמאל, תווית בצד ימין — הפוך לסדר הקריאה הטבעי), וגם דוחף את כל
    השורה שמאלה במקום שתיצמד לימין כמו שאר הפאנל */
 .xlsx-pdf-panel-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 4px 0; direction: ltr; }
-.xlsx-pdf-box { background: #fff; border: 1px solid #666; padding: 2px 10px; border-radius: 2px; }
-.xlsx-pdf-label { color: #d00; font-weight: bold; }
+.xlsx-pdf-box { border: 1px solid #666; padding: 2px 10px; border-radius: 2px; }
+.xlsx-pdf-label { color: #000; font-weight: bold; }
 .xlsx-pdf-value { color: #000; font-weight: bold; font-size: 13px; min-width: 50px; text-align: center; }
+/* כותרת המקטע בעמודי החישוב — מסגרת בלי המילוי האפור של דוח הסקירה */
+.xlsx-calc-page .gov-section-title { background: none; border: 1px solid #000; }
 .xlsx-pdf-formula { direction: ltr; }
 
 /* דוח סקירה PDF — פורמט רשמי, A4 לרוחב, עמוד = div נפרד (לא קנבס ארוך שנחתך),
