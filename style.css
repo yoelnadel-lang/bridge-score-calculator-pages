@@ -340,40 +340,37 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 .audit-formula-eq { font-size: .85rem; color: #333; text-align: right; }
 .audit-formula-sub { font-size: .82rem; color: #57606a; margin-top: 3px; text-align: right; word-break: break-word; }
 
-/* תקציר מנהלים */
-.summary-block h3 { color: var(--primary); font-size: 1rem; margin: 16px 0 6px; }
-.summary-block table { width: 100%; border-collapse: collapse; font-size: .85rem; }
-.summary-block th, .summary-block td { border: 1px solid var(--border); padding: 5px 9px; text-align: right; }
-.summary-block th { background: var(--bg); }
-.summary-name { font-size: 1.15rem; font-weight: 800; margin: 4px 0; }
-.summary-meta { margin: 0 0 6px; color: #57606a; font-size: .88rem; }
-.summary-block h4 { font-size: .92rem; margin: 12px 0 4px; }
-.summary-table { margin: 6px 0 8px; }
-.summary-table th { white-space: nowrap; }
+/* תקציר מנהלים — אותה שפה חזותית כמו דוח הסקירה ודוח החישוב (gov-*):
+   כותרות מקטע על פס אפור, טבלאות בגבולות שחורים דקים, טקסט שחור. הצבע
+   היחיד: מדי המהירות (טבלה 15) ואדום לדחיפות/בטיחות, כמו "תשומת לב מיידית" */
+.summary-block { color: #000; }
+/* כותרות המקטעים בתקציר — בלי המילוי האפור של דוח הסקירה: מספור, הדגשה וקו
+   תחתון דק, כמו בכותרות של מכתב הנדסי */
+.summary-block .summary-section-title {
+  background: none; padding: 0 0 3px; border-bottom: 1px solid #000; font-size: 1.08em; margin: 18px 0 8px;
+}
+.summary-block .gov-section-title:first-child { margin-top: 0; }
+.summary-p { margin: 0 0 8px; line-height: 1.6; text-align: justify; }
+.summary-block .gov-table { margin: 2px 0 12px; }
+.summary-block .gov-table th { text-align: center; vertical-align: middle; }
+.summary-block .gov-attention { margin: 6px 0 4px; }
+.summary-block .gauges { margin: 2px 0 6px; }
 .summary-num { text-align: center !important; white-space: nowrap; }
-.summary-sub { font-size: .78rem; color: #57606a; margin-top: 2px; }
-.summary-sub-inline { font-size: .78rem; color: #57606a; }
-.summary-treat td:first-child { white-space: nowrap; font-weight: 700; text-align: center; }
-.summary-prio-5 td:first-child { background: #ffd7d5; color: #a40e26; }
-.summary-prio-4 td:first-child { background: #ffe3cc; color: #9a4b00; }
-.summary-prio-3 td:first-child { background: #fff4c2; color: #7d5a00; }
-.summary-prio-2 td:first-child { background: #eef1f4; color: #57606a; }
-.summary-disclaimer { margin-top: 14px; }
+.summary-sub { font-size: .85em; color: #333; margin-top: 2px; }
+.summary-sub-inline { font-size: .85em; color: #333; }
 .summary-treat { table-layout: fixed; }
 .summary-treat .st-prio { width: 10%; }
 .summary-treat .st-def { width: 18%; }
 .summary-treat .st-where { width: 21%; }
 .summary-treat .st-after { width: 21%; }
-.summary-treat th { white-space: normal; text-align: center; vertical-align: middle; }
+.summary-treat td:first-child { font-weight: 700; text-align: center; }
 .summary-treat td:last-child { text-align: center; vertical-align: middle; }
-.summary-prio-safety td:first-child { background: #ffd7d5; color: #a40e26; }
-.summary-safety-tag { font-size: .7rem; font-weight: 700; white-space: normal; margin-top: 3px; }
-.summary-chg { font-size: .78rem; overflow-wrap: anywhere; }
-.summary-nochange { color: #8c959f; }
-.summary-whatif { background: #eef7ee; border-inline-start: 4px solid #1a7f37; padding: 6px 10px; margin: 8px 0; }
-.summary-attention { border: 2px solid #b00020; padding: 6px 10px; margin: 8px 0 4px; }
-.summary-attention-title { color: #b00020; font-weight: 700; margin-bottom: 2px; }
-.summary-attention-text { white-space: pre-wrap; }
+.summary-prio-urgent td:first-child { color: #b00020; }
+.summary-safety-tag { font-size: .8em; font-weight: 700; margin-top: 3px; }
+.summary-chg { font-size: .9em; overflow-wrap: anywhere; }
+.summary-nochange { color: #666; }
+.summary-result td:first-child { font-weight: 700; }
+.summary-disclaimer { margin-top: 14px; }
 .gauge-of { font-size: .9rem; font-weight: 600; color: #57606a; }
 .defect-narrative { margin: 6px 0 0; }
 .defect-narrative p { line-height: 1.6; margin: 0 0 8px; text-align: justify; }
@@ -393,18 +390,30 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
 
 .empty-note { text-align: center; color: #57606a; padding: 22px; font-size: .9rem; }
 
-/* תקציר מנהלים PDF — קונטיינר מחוץ למסך ברוחב A4, לאורך */
-#pdf-summary {
-  position: absolute; top: 0; left: -10000px; width: 794px;
-  background: #fff; padding: 28px 32px; direction: rtl;
-  font-family: "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif; color: var(--text);
+/* תקציר מנהלים PDF — A4 לאורך. הזרימה (#pdf-summary) נרנדרת כקנבס אחד
+   ונחתכת לעמודים; כותרת העמוד (.summary-pdf-head: לוגואים + טבלת שם/מספר
+   מבנה/סוקר/חברה/דף, בדיוק כמו בדוח הסקירה) נרנדרת בנפרד לכל עמוד. אותו
+   גופן וגודל כמו .gov-page */
+#pdf-summary, .summary-pdf-head {
+  position: absolute; top: 0; left: -10000px; background: #fff; direction: rtl;
+  font-family: Arial, "Segoe UI", "Noto Sans Hebrew", sans-serif; color: #000; font-size: 13.3px;
 }
-#pdf-summary h1 { font-size: 1.4rem; color: var(--primary); margin: 0 0 4px; }
-/* שורת כותרת עם לוגואים, כמו בעמוד הראשון של דוח הסקירה: לוגו החברה מימין,
-   לוגואי המזמין משמאל, הכותרת במרכז */
-#pdf-summary .summary-title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
-#pdf-summary .summary-title-row h1 { flex: 1 1 auto; text-align: center; margin: 0; }
-#pdf-summary .pdf-sub { margin: 0 0 14px; color: #57606a; font-size: .9rem; }
+/* נייר המכתבים בעמוד 1 של התקציר */
+.summary-pdf-head .sl-top { display: flex; align-items: flex-end; justify-content: space-between; }
+.summary-pdf-head .sl-logo { flex: 0 0 130px; width: 130px; height: 64px; justify-content: flex-start; }
+.summary-pdf-head .sl-top-left { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.summary-pdf-head .sl-date { font-size: 1em; }
+.summary-pdf-head .sl-rule { border-top: 1.5px solid #000; margin: 8px 0 26px; }
+.summary-pdf-head .sl-to { margin: 0 0 18px; line-height: 1.5; }
+.summary-pdf-head .sl-subject { font-weight: 700; font-size: 1.25em; text-align: center; margin: 0 0 6px; }
+.summary-pdf-head .sl-subtitle { text-align: center; margin: 0 0 22px; }
+.summary-pdf-head .sl-details { width: 100%; border-collapse: collapse; border-top: 1px solid #000; border-bottom: 1px solid #000; margin: 0 0 14px; }
+.summary-pdf-head .sl-details th { font-weight: 400; color: #444; text-align: right; white-space: nowrap; padding: 4px 6px 4px 8px; width: 1%; }
+.summary-pdf-head .sl-details td { text-align: right; padding: 4px 16px 4px 6px; }
+.summary-pdf-head .sl-details tr:first-child th, .summary-pdf-head .sl-details tr:first-child td { padding-top: 8px; }
+.summary-pdf-head .sl-details tr:last-child th, .summary-pdf-head .sl-details tr:last-child td { padding-bottom: 8px; }
+/* כותרת רצה בעמודים 2 ואילך */
+.summary-pdf-head .sl-running { display: flex; justify-content: space-between; border-bottom: 1px solid #000; padding: 0 0 4px; font-size: .92em; }
 
 /* ייצוא "חישוב ציון" PDF — קונטיינר מחוץ למסך ברוחב A4 לרוחב (טבלאות
    הבקרה רחבות, 9 עמודות — צריכות יותר רוחב מהתקציר) */
@@ -450,6 +459,12 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
 /* כותרת המקטע בעמודי החישוב — מסגרת בלי המילוי האפור של דוח הסקירה */
 .xlsx-calc-page .gov-section-title { background: none; border: 1px solid #000; }
 .xlsx-pdf-formula { direction: ltr; }
+/* מקרא המונחים — טקסט הסבר, ולכן מיושר לימין ובגופן קריא יותר משאר הגיליון */
+.xlsx-pdf-table th.xgl, .xlsx-pdf-table td.xgl { font-size: 12px; text-align: right; vertical-align: top; padding: 4px 6px; }
+.xlsx-pdf-table th.xgl { text-align: center; }
+.xlsx-pdf-legend { margin: 2px 0 4px; }
+.xgl-en { font-size: .85em; color: #333; text-align: right; }
+.calc-glossary td { text-align: right; vertical-align: top; }
 
 /* דוח סקירה PDF — פורמט רשמי, A4 לרוחב, עמוד = div נפרד (לא קנבס ארוך שנחתך),
    כך שכותרת המבנה ומספור העמוד חוזרים אמיתית על כל עמוד. */

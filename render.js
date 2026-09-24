@@ -298,6 +298,9 @@ function renderControlAudit(state, result, forPdf) {
     <li>רכיבי המפתח משוקללים יחד לציון <strong>SCS</strong>.</li>
     <li>ה-SCS מומר לציון <strong>Condition PI</strong> (משוואות 8.1–8.2).</li>
   </ol>
+  <h3>מקרא מונחים ואופן החישוב</h3>
+  ${(() => { const gl = calcGlossaryTableParts(dimLabel, "xgl");
+    return `<table class="spans-table audit-table calc-glossary">${gl.thead}<tbody>${gl.rows.join("")}</tbody></table>`; })()}
   ${forPdf ? "" : `<p class="hint">המסך הזה אינו מודפס במלואו — לייצוא מלא ומעוצב של הבקרה, לרבות כל הנוסחאות
     וההצבות, יש להשתמש בכפתור "🧮 ייצוא חישוב ציון".</p>`}`;
 
@@ -812,6 +815,11 @@ function summaryMeaningName(m) {
   return m ? ` (${esc(m.name)})` : "";
 }
 
+// מבנה התקציר — באותה שפה חזותית כמו דוח הסקירה ודוח החישוב: כותרות מקטע
+// "[n] כותרת" על פס אפור, טבלאות בגבולות שחורים דקים, טקסט שחור. כל מקטע
+// פותח בפסקה מלאה שמסבירה את מה שמתחתיו (לא כותרת עם שורה בודדת).
+// .summary-keep = אסור לחתוך עמוד מיד אחרי האלמנט (פסקת פתיחה של טבלה) —
+// ר' exportSummary ב-pdf.js
 function renderSummary(state, result, summary, plan) {
   if (!result || !summary || !summary.totalScored) return '<p class="empty-note">התקציר ייווצר אוטומטית לאחר הזנת רכיבים.</p>';
   const b = result.bridge;
@@ -820,35 +828,58 @@ function renderSummary(state, result, summary, plan) {
   const ia = state.immediateAttention || { text: "", photo: "" };
   const iaText = (ia.text || "").trim(), iaPhoto = (ia.photo || "").trim();
   const hasIA = !!(iaText || iaPhoto);
+  const spansTxt = (ids) => summarySpansText(ids, single, state.spans.length);
+  const sectionTitle = (n, t) => `<div class="gov-section-title summary-section-title">${n}. ${t}</div>`;
+  const meaningQ = (m) => (m ? ` — "${esc(m.name)}"` : "");
 
   let html = '<div class="summary-block">';
 
-  // 1. שם המבנה
-  html += `<h3>1. המבנה</h3>
-    <p class="summary-name">${esc(state.name || "—")}</p>
-    <p class="summary-meta">${state.number ? `מספר מבנה: <bdi>${esc(state.number)}</bdi> · ` : ""}${esc(STRUCTURE_CLASSES[state.structureClass].label)} · ${state.spans.length} ${state.spans.length === 1 ? "מפתח" : "מפתחים"}${state.inspDate ? ` · תאריך סקירה: ${esc(fmtIsoDate(state.inspDate))}` : ""}</p>`;
+  // [1] ציוני המבנה ומשמעותם — פסקת פתיחה (זיהוי המבנה + הסבר שני הציונים
+  // והציון שהתקבל בכל אחד), ומתחתיה מדי המהירות עם משמעות כל ציון
+  html += `${sectionTitle(1, "ציוני מצב המבנה ומשמעותם")}
+    <p class="summary-p">בהתאם למתודולוגיית נתיבי ישראל, מצב המבנה מוערך באמצעות שני מדדי <bdi>Condition PI</bdi>
+      בסולם 0–100: <strong>ציון ממוצע</strong> (<bdi>CPIav</bdi>) — ממוצע משוקלל של ציוני המצב של כל הרכיבים
+      שנסקרו, לפי דרגת חשיבותם; ו<strong>ציון קריטי</strong> (<bdi>CPIcrit</bdi>) — הנקבע לפי ציון המצב הגרוע ביותר
+      מבין הרכיבים בדרגת חשיבות "גבוהה מאוד". ציוני המבנה בסקירה הנוכחית: ציון ממוצע
+      <strong dir="ltr">${fmt(b.method_norm.cpiAv)}</strong>${meaningQ(b.meaningAv)}, וציון קריטי
+      <strong dir="ltr">${fmt(b.cpiCrit)}</strong>${meaningQ(b.meaningCrit)}. סיווג המצב בהתאם לטבלה 15
+      ב"הנחיות להערכת המצב המבני של גשרים, מנהרות ומבני דרך" (מהדורה 9):</p>
+    <div class="gauges">
+      ${gaugeSVG(b.method_norm.cpiAv, MEANING_AV, b.meaningAv, "<bdi>CPIav</bdi> — ציון ממוצע", "מצב המבנה בכללותו · משוואה 6.2")}
+      ${gaugeSVG(b.cpiCrit, MEANING_CRIT, b.meaningCrit, "<bdi>CPIcrit</bdi> — ציון קריטי", "הרכיב הקובע בדרגת חשיבות \"גבוהה מאוד\"")}
+    </div>`;
 
-  // ממצא לתשומת לב מיידית — מוצג מיד, לפני הציונים, כדי שלא יוחמץ
+  // ממצא לתשומת לב מיידית — מיד אחרי הציונים, באותה מסגרת אדומה כמו בדוח הסקירה
   if (hasIA) {
-    html += `<div class="summary-attention">
-      <div class="summary-attention-title">⚠ תשומת לב מיידית</div>
-      ${iaText ? `<div class="summary-attention-text">${esc(iaText)}</div>` : ""}
-      ${iaPhoto ? `<div class="summary-sub">קוד תמונה: <bdi>${esc(iaPhoto)}</bdi></div>` : ""}
+    html += `<div class="gov-attention">
+      <div class="gov-attention-title">⚠ תשומת לב מיידית</div>
+      ${iaText ? `<div class="gov-attention-text">${esc(iaText)}</div>` : ""}
+      ${iaPhoto ? `<div class="gov-attention-codes">קוד תמונה: <span dir="ltr">${esc(iaPhoto)}</span></div>` : ""}
     </div>`;
   }
 
-  // 2+3. הציונים ומשמעותם
-  html += `<h3>2. הציונים שהתקבלו ומשמעותם</h3>
-    <p class="hint">ציון בסולם 0–100; המשמעות לפי טבלה 15 ב"הנחיות להערכת המצב המבני של גשרים, מנהרות ומבני דרך" (נתיבי ישראל, מהדורה 9).</p>
-    <div class="gauges">
-    ${gaugeSVG(b.method_norm.cpiAv, MEANING_AV, b.meaningAv, "<bdi>CPIav</bdi> — ציון ממוצע", "מצב המבנה בכללותו · משוואה 6.2")}
-    ${gaugeSVG(b.cpiCrit, MEANING_CRIT, b.meaningCrit, "<bdi>CPIcrit</bdi> — ציון קריטי", "הרכיב הגרוע בחשיבות \"גבוהה מאוד\"")}
-  </div>`;
+  // [2] קביעת הציון — פסקה על הציון הממוצע, ופסקה על הציון הקריטי
+  // שמובילה לטבלת הרכיבים הקובעים אותו
+  html += sectionTitle(2, "קביעת הציון — רכיבים ופגמים קובעים");
+  const contribs = summary.avContributions || [];
+  const notSurveyedTxt = summary.notSurveyed.length
+    ? ` ${summary.notSurveyed.length === 1 ? "רכיב אחד קיים במבנה אך סומן" : `${summary.notSurveyed.length} רכיבים קיימים במבנה אך סומנו`} "לא ניתן לסקירה" ולא ${summary.notSurveyed.length === 1 ? "נכלל" : "נכללו"} בחישוב הציון: ${summary.notSurveyed.map((c) => esc(c.name)).join("; ")}.`
+    : "";
+  if (contribs.length) {
+    const total = contribs.reduce((a, x) => a + x.contribution, 0);
+    const byName = new Map();
+    for (const x of contribs) byName.set(x.comp.name, (byName.get(x.comp.name) || 0) + x.contribution);
+    const top = [...byName.entries()].sort((a, c) => c[1] - a[1]).slice(0, 3)
+      .map(([name, v]) => `${esc(name)} (${Math.round((v / total) * 100)}%)`);
+    const weak = summary.weakestSpan;
+    html += `<p class="summary-p"><strong>הציון הממוצע (<bdi>CPIav</bdi> = <span dir="ltr">${fmt(b.method_norm.cpiAv)}</span>)</strong>
+      מחושב כממוצע משוקלל של ציוני המצב של כל הרכיבים שנסקרו, לפי מקדמי החשיבות (טבלה 13)${
+      single ? "" : " ולפי שטח המפתחים (משוואה 6.2)"}. עיקר הפחתת הציון נובע מהרכיבים: ${top.join(", ")}.${
+      weak ? ` המפתח בעל הציון הנמוך ביותר: מפתח ${esc(weak.id)} (<bdi>CPIav</bdi> = <span dir="ltr">${fmt(weak.cpiAv)}</span>).` : ""}${notSurveyedTxt}</p>`;
+  } else if (notSurveyedTxt) {
+    html += `<p class="summary-p">${notSurveyedTxt.trim()}</p>`;
+  }
 
-  // 3. מה קבע את הציון — קצר: טבלת הרכיבים הקובעים את הציון הקריטי, ושורה
-  // אחת על הגורמים העיקריים לציון הממוצע (הפירוט המלא — בטבלת הטיפול)
-  html += `<h3>3. מה קבע את הציון</h3>`;
-  const spansTxt = (ids) => summarySpansText(ids, single, state.spans.length);
   const ties = summary.criticalTies || [];
   if (ties.length) {
     // שורה אחת לכל רכיב (גם אם הוא במצב הקריטי בכמה מפתחים); כל פגם מציין
@@ -879,36 +910,29 @@ function renderSummary(state, result, summary, plan) {
         <td class="summary-num">${g.sMax}</td>
       </tr>`;
     }).join("");
-    html += `<p><strong>ציון קריטי (<bdi>CPIcrit</bdi> = ${fmt(b.cpiCrit)}):</strong> נקבע לפי הרכיב בחשיבות "גבוהה מאוד" במצב הגרוע ביותר (<bdi>Eci = ${fmt(b.scsCrit)}</bdi>)${ties.length > 1 ? `; ${ties.length} רכיבים נמצאים במצב זה, ולכן תיקון של חלק מהם בלבד לא ישנה את הציון` : ""}:</p>
-      <table class="summary-table">
-        <tr><th>רכיב</th><th>מיקום</th><th>פגם</th><th>חומרה (<bdi>S</bdi>)</th></tr>
-        ${rows}
+    const nComp = groups.size;
+    html += `<p class="summary-p summary-keep"><strong>הציון הקריטי (<bdi>CPIcrit</bdi> = <span dir="ltr">${fmt(b.cpiCrit)}</span>)</strong>
+      נקבע לפי ציון המצב המרבי מבין הרכיבים בדרגת חשיבות "גבוהה מאוד" (<bdi>Eci = ${fmt(b.scsCrit)}</bdi>).${
+      ties.length > 1 ? ` ציון זה מתקבל ${nComp > 1 ? `ב-${nComp} רכיבים` : "ברכיב אחד"}${ties.length > nComp ? ` וב-${ties.length} מיקומים במבנה` : ""}; לפיכך, שיקום של חלקם בלבד לא ישפר את הציון הקריטי, ונדרש טיפול בכל המיקומים.` : ""}
+      הרכיבים והפגמים הקובעים את הציון הקריטי:</p>
+      <table class="gov-table summary-table summary-crit">
+        <thead><tr><th>רכיב</th><th>מיקום</th><th>פגם (קוד ותיאור)</th><th class="summary-num">דרגת חומרה (<bdi>S</bdi>)</th></tr></thead>
+        <tbody>${rows}</tbody>
       </table>`;
   }
 
-  const contribs = summary.avContributions || [];
-  if (contribs.length) {
-    const total = contribs.reduce((a, x) => a + x.contribution, 0);
-    const byName = new Map();
-    for (const x of contribs) byName.set(x.comp.name, (byName.get(x.comp.name) || 0) + x.contribution);
-    const top = [...byName.entries()].sort((a, c) => c[1] - a[1]).slice(0, 3)
-      .map(([name, v]) => `${esc(name)} (${Math.round((v / total) * 100)}%)`);
-    const weak = summary.weakestSpan;
-    html += `<p><strong>ציון ממוצע (<bdi>CPIav</bdi> = ${fmt(b.method_norm.cpiAv)}):</strong> משקלל את כל הרכיבים שנסקרו. הרכיבים שתרמו הכי הרבה להורדתו: ${top.join(", ")}${weak ? `; המפתח החלש ביותר: מפתח ${esc(weak.id)} (<bdi>CPIav</bdi> = ${fmt(weak.cpiAv)})` : ""}.</p>`;
-  }
-
-  // 4. במה צריך לטפל — הפגמים שתיקונם נדרש לשיפור הציון (Calc.improvementPlan),
+  // [3] טיפולים נדרשים — הפגמים שתיקונם נדרש לשיפור הציון (Calc.improvementPlan),
   // בתוספת ליקויי בטיחות ופגמים חמורים. הסדר: תשומת לב מיידית ← בטיחות
   // משתמשי הדרך ← חומרה ← השפעה על הציון. עמודת הציון מצטברת: הציון לאחר
   // תיקון השורה וכל השורות שמעליה
-  html += `<h3>4. במה צריך לטפל — וכמה זה יעלה את הציון</h3>`;
-  const groups4 = plan ? plan.groups : [];
+  html += sectionTitle(3, "טיפולים נדרשים והשפעתם הצפויה על ציון המבנה");
+  const groups3 = plan ? plan.groups : [];
   if (!plan) {
     html += `<p class="hint">תוכנית הטיפול מחושבת בעת פתיחת לשונית התקציר או ייצוא ה-PDF.</p>`;
-  } else if (groups4.length || hasIA) {
+  } else if (groups3.length || hasIA) {
     const rows = [];
     if (hasIA) {
-      rows.push(`<tr class="summary-prio-5">
+      rows.push(`<tr class="summary-prio-urgent">
         <td>מיידית</td>
         <td>⚠ תשומת לב מיידית</td>
         <td>${esc(iaText || "—")}${iaPhoto ? `<div class="summary-sub">קוד תמונה: <bdi>${esc(iaPhoto)}</bdi></div>` : ""}</td>
@@ -917,7 +941,7 @@ function renderSummary(state, result, summary, plan) {
       </tr>`);
     }
     let prev = plan.current;
-    for (const g of groups4) {
+    for (const g of groups3) {
       const guide = DEFECT_GUIDANCE[g.def];
       const byComp = new Map();
       for (const it of g.items) {
@@ -927,37 +951,46 @@ function renderSummary(state, result, summary, plan) {
       const where = [...byComp.values()].map(({ comp, spans }) =>
         `${summaryCompLabel(comp, catalogIds)}${single ? "" : ` <span class="summary-sub-inline">(${esc(spansTxt(spans))})</span>`}`).join("<br>");
       const prio = g.s >= 5 ? "מיידית" : (g.s === 4 || g.isSafety) ? "גבוהה" : g.s === 3 ? "רגילה" : "שוטפת";
-      const cls = g.s >= 5 ? "summary-prio-5" : g.isSafety ? "summary-prio-safety" : `summary-prio-${Math.max(2, g.s)}`;
-      rows.push(`<tr class="${cls}">
+      const urgent = g.s >= 5 || g.isSafety;
+      rows.push(`<tr${urgent ? ' class="summary-prio-urgent"' : ""}>
         <td>${prio}${g.isSafety ? `<div class="summary-safety-tag">⚠ בטיחות משתמשי הדרך</div>` : ""}</td>
         <td>${summaryDefectLabel(g.def)}<div class="summary-sub">חומרה ${g.sMin < g.s ? `<span dir="ltr">${g.sMin}–${g.s}</span>` : `${g.s}${SUMMARY_SEVERITY_NAME[g.s] ? " — " + esc(SUMMARY_SEVERITY_NAME[g.s]) : ""}`}</div></td>
         <td>${where}</td>
-        <td>${guide ? esc(guide.remedy) : "לפי שיקול דעת מהנדס."}</td>
+        <td>${guide ? esc(guide.remedy) : "בהתאם להנחיית מהנדס."}</td>
         <td>${summaryScoreChange("CPIcrit", prev.cpiCrit, g.after.cpiCrit)}${summaryScoreChange("CPIav", prev.cpiAv, g.after.cpiAv)}</td>
       </tr>`);
       prev = g.after;
     }
-    html += `<table class="summary-table summary-treat">
-        <tr><th class="st-prio">עדיפות</th><th class="st-def">פגם</th><th class="st-where">רכיבים ומיקום</th><th>כיוון טיפול מומלץ</th><th class="st-after">ציון מצטבר לאחר התיקון</th></tr>
-        ${rows.join("")}
+    html += `<p class="summary-p summary-keep">הטיפולים הנדרשים מדורגים בטבלה לפי סדר עדיפות: ממצאים הדורשים תשומת לב
+      מיידית, ליקויים המהווים סיכון בטיחותי למשתמשי הדרך, ולאחריהם לפי דרגת החומרה והשפעת הפגם על ציון המבנה.
+      בעמודה האחרונה מוצג הציון הצפוי במצטבר, בהנחה שבוצעו הטיפולים בשורה זו ובכל השורות שמעליה. האומדן נערך
+      בהתאם לסעיף 2.6.6 ב"הנחיות לביצוע סקירת גשרים, מנהרות ומבני דרך": הפגם נחשב משוקם במלואו, ודירוג הרכיב
+      מחושב מחדש על בסיס יתר הפגמים שתועדו בו.</p>
+      <table class="gov-table summary-table summary-treat">
+        <thead><tr><th class="st-prio">דרגת עדיפות</th><th class="st-def">סוג הפגם</th><th class="st-where">רכיב ומיקום</th><th>אופן הטיפול המומלץ</th><th class="st-after">ציון צפוי מצטבר לאחר הטיפול</th></tr></thead>
+        <tbody>${rows.join("")}</tbody>
       </table>`;
     const all = plan.allFix;
     if (all) {
-      html += `<div class="summary-whatif">📈 <strong>ביצוע כל הטיפולים בטבלה צפוי להעלות את ציון המבנה:</strong>
-        <div>ציון קריטי (<bdi>CPIcrit</bdi>): <span dir="ltr">${fmt(plan.current.cpiCrit)} → <strong>${fmt(all.cpiCrit)}</strong></span>${summaryMeaningName(all.meaningCrit)}</div>
-        <div>ציון ממוצע (<bdi>CPIav</bdi>): <span dir="ltr">${fmt(plan.current.cpiAv)} → <strong>${fmt(all.cpiAv)}</strong></span>${summaryMeaningName(all.meaningAv)}</div>
-      </div>`;
+      const row = (label, cur, mCur, aft, mAft) => `<tr>
+        <td>${label}</td>
+        <td class="summary-num"><span dir="ltr">${fmt(cur)}</span>${mCur ? ` — ${esc(mCur.name)}` : ""}</td>
+        <td class="summary-num"><strong dir="ltr">${fmt(aft)}</strong>${mAft ? ` — <strong>${esc(mAft.name)}</strong>` : ""}</td>
+      </tr>`;
+      html += `<p class="summary-p summary-keep"><strong>ציון המבנה הצפוי לאחר ביצוע מלוא הטיפולים:</strong></p>
+        <table class="gov-table summary-table summary-result">
+          <thead><tr><th>מדד</th><th class="summary-num">ציון נוכחי</th><th class="summary-num">ציון צפוי לאחר ביצוע הטיפולים</th></tr></thead>
+          <tbody>
+            ${row("ציון קריטי (<bdi>CPIcrit</bdi>)", plan.current.cpiCrit, plan.current.meaningCrit, all.cpiCrit, all.meaningCrit)}
+            ${row("ציון ממוצע (<bdi>CPIav</bdi>)", plan.current.cpiAv, plan.current.meaningAv, all.cpiAv, all.meaningAv)}
+          </tbody>
+        </table>`;
     }
-    html += `<p class="hint">הציון לאחר התיקון הוא אומדן לפי סעיף 2.6.6 ב"הנחיות לביצוע סקירת גשרים, מנהרות ומבני דרך": הפגם נחשב מתוקן במלואו והרכיב מדורג מחדש לפי שאר הפגמים שנרשמו בו.${
-      plan.otherCount ? ` ${plan.otherCount} פגמים נוספים שנמצאו משפיעים על הציון במידה מועטה — לטיפול במסגרת אחזקה שוטפת.` : ""}</p>`;
+    if (plan.otherCount) {
+      html += `<p class="summary-p">בנוסף תועדו ${plan.otherCount} פגמים בעלי השפעה זניחה על ציון המבנה; הטיפול בהם יבוצע במסגרת האחזקה השוטפת.</p>`;
+    }
   } else {
-    html += `<p>לא נדרש טיפול לשיפור הציון.${plan.otherCount ? ` ${plan.otherCount} פגמים קלים שנמצאו — לטיפול במסגרת אחזקה שוטפת.` : ""}</p>`;
-  }
-
-  if (summary.notSurveyed.length) {
-    html += `<h3>רכיבים שלא נסקרו</h3>
-      <p>${summary.notSurveyed.length} רכיב/ים קיימים במבנה אך סומנו "לא ניתן לסקירה" — לא נכללו בציון:
-      ${summary.notSurveyed.map((c) => esc(c.name)).join("; ")}.</p>`;
+    html += `<p class="summary-p">לא נדרשים טיפולים לשיפור ציון המבנה.${plan.otherCount ? ` ${plan.otherCount} פגמים קלים שתועדו יטופלו במסגרת האחזקה השוטפת.` : ""}</p>`;
   }
 
   // בייצוא ה-PDF הפסקה הזו מוסרת מהזרימה ומודפסת כשורת תחתית בכל עמוד
@@ -1060,8 +1093,67 @@ function xlsxPdfScoreTableParts(pairs, showSpanCol) {
     </tr></thead>`;
   return { thead, rows };
 }
+// --- מקרא מונחים: הסבר לכל סימון שמופיע בגיליונות החישוב — משמעות, אופן
+// החישוב והמקור ב"הנחיות להערכת המצב המבני" (מהדורה 9). משותף ל-PDF החישוב
+// (מקטע נפרד) ולבקרה (לשונית + ייצוא "חישוב ציון"). הערכים המספריים בטבלה
+// (מקדמי B ו-Eif, ערכי ההיקף) נלקחים מ-IMPORTANCE/EXTENT ולא מוקלדים בנפרד
+function calcGlossaryRows(dimLabel) {
+  const f = (s) => `<span dir="ltr">${s}</span>`;
+  const byImp = (key) => Object.values(IMPORTANCE).map((d) => `${fmt(d[key], 1)} (${d.label})`).join(", ");
+  const exVals = Object.entries(EXTENT).map(([k, d]) => `${k} = ${fmt(d.value, 1)}`).join("; ");
+  return [
+    ["S", "דרגת חומרה<div class=\"xgl-en\" dir=\"ltr\">Severity</div>",
+      "חומרת הפגם, בסולם 1–5: 1 — כמו חדש; 2 — הידרדרות ראשונית; 3 — פגם בינוני; 4 — פגם חמור; 5 — כשל.",
+      "נקבעת בשטח על ידי הסוקר לכל פגם; לרכיב נלקחת החומרה המרבית.", "טבלה 7"],
+    ["Ex", "היקף הנזק<div class=\"xgl-en\" dir=\"ltr\">Extent</div>",
+      "החלק היחסי של הרכיב שנפגע: A — ללא נזק משמעותי; B — עד 5%; C — 5%–20%; D — 20%–50%; E — מעל 50%.",
+      `ערך מספרי: ${f(exVals)}.`, "טבלה 8"],
+    ["חשיבות", "סיווג חשיבות הרכיב",
+      "מידת החיוניות של הרכיב לתפקוד המבנה ולבטיחותו: גבוהה מאוד, גבוהה, בינונית, נמוכה.",
+      "לפי קטלוג הרכיבים (אוגדן חלוקה ומספור רכיבים); קובע את Ecf ואת Eif.", "טבלאות 12–13"],
+    ["Ecs", "ציון מצב הרכיב<div class=\"xgl-en\" dir=\"ltr\">Element Condition Score</div>",
+      "ציון המצב הבסיסי של הרכיב בסולם 1–5, לפני התחשבות בחשיבותו.",
+      `${f("Ecs = S + Ex")} — ערך ההיקף הממוצע של תתי-הרכיבים בחומרה המרבית, משוקלל לפי גודלם; כאשר ${f("S = 5")}: ${f("Ecs = 5.0")}.`, "טבלה 11"],
+    ["Ecf", "מקדם תיקון החשיבות<div class=\"xgl-en\" dir=\"ltr\">Element Condition Factor</div>",
+      "הפחתה מציון המצב של רכיב שאינו בחשיבות \"גבוהה מאוד\". ההפחתה קטנה ככל שמצב הרכיב מחמיר, ומתאפסת בכשל.",
+      `${f("Ecf = B − (Ecs − 1) · B / 4")}; מקדם הבסיס B: ${byImp("ecfBase")}.`, "טבלה 12"],
+    ["Eci", "ציון המצב המתוקן<div class=\"xgl-en\" dir=\"ltr\">Element Condition Index</div>",
+      "ציון מצב הרכיב לאחר התחשבות בחשיבותו — הערך שנכנס לחישוב ציון המבנה.",
+      `${f("Eci = Ecs − Ecf")}, ולא פחות מ-1.`, "משוואה 5"],
+    ["Eif", "מקדם משקל החשיבות<div class=\"xgl-en\" dir=\"ltr\">Element Importance Factor</div>",
+      "משקל הרכיב בממוצע המשוקלל של המפתח.",
+      `${byImp("eif")}.`, "טבלה 13"],
+    ["SCSav", "ערך דירוג מצב ממוצע<div class=\"xgl-en\" dir=\"ltr\">Structure Condition Score</div>",
+      "מצב המפתח או המבנה בכללותו, בסולם 1–5.",
+      `למפתח: ${f("SCSav = Σ(Eci · Eif) / ΣEif")}. במבנה בן 3 מפתחים ומעלה: ממוצע ערכי המפתחים, משוקלל לפי ${esc(dimLabel)}.`, "משוואות 6.1, 6.2"],
+    ["SCScrit", "ערך דירוג מצב קריטי",
+      "מצב הרכיב הגרוע ביותר מבין הרכיבים בחשיבות \"גבוהה מאוד\", בסולם 1–5.",
+      `${f("SCScrit = max(Eci)")} של הרכיבים בחשיבות "גבוהה מאוד", בכל המפתחים.`, "משוואה 7"],
+    ["Condition PI", "סמן דירוג מצב המבנה<div class=\"xgl-en\" dir=\"ltr\">CPIav / CPIcrit</div>",
+      "המרת ערך הדירוג לסולם 0–100 (100 — מבנה כמו חדש). משמעות הציון לפי טבלה 15.",
+      `${f("CPI = 100 − 2 · (SCS² + 6.5 · SCS − 7.5)")}, בנפרד ל-SCSav ול-SCScrit.`, "משוואות 8.1, 8.2"],
+    ["Deck Area", "מימד השקלול של המפתח",
+      `${esc(dimLabel)} — משמש לשקלול המפתחים במבנה בן 3 מפתחים ומעלה.`,
+      "נמדד לכל מפתח.", "סעיף 03.2.8"],
+  ];
+}
+function calcGlossaryTableParts(dimLabel, cellClass) {
+  const c = cellClass ? ` class="${cellClass}"` : "";
+  const w = (pct) => ` style="width:${pct}%"`;
+  const thead = `<thead><tr><th${c}${w(8)}>סימון</th><th${c}${w(17)}>מונח</th><th${c}${w(32)}>משמעות</th><th${c}${w(33)}>אופן החישוב</th><th${c}${w(10)}>מקור בהנחיות</th></tr></thead>`;
+  const rows = calcGlossaryRows(dimLabel).map(([sym, name, meaning, calc, src]) =>
+    `<tr><td${c}><strong dir="ltr">${esc(sym)}</strong></td><td${c}>${name}</td><td${c}>${meaning}</td><td${c}>${calc}</td><td${c}>${src}</td></tr>`);
+  return { thead, rows };
+}
+// שורת מקרא מקוצרת מתחת לכל גיליון חישוב (כמו המקרא S/Ex בדוח הסקירה)
+const CALC_LEGEND_HTML = `<div class="gov-legend xlsx-pdf-legend">
+  <bdi>Ecs</bdi> = ציון מצב הרכיב &nbsp;·&nbsp; <bdi>Ecf</bdi> = מקדם תיקון החשיבות &nbsp;·&nbsp;
+  <bdi>Eci</bdi> = ציון המצב המתוקן (<bdi>Ecs − Ecf</bdi>) &nbsp;·&nbsp; <bdi>Eif</bdi> = מקדם משקל החשיבות &nbsp;·&nbsp;
+  <bdi>SCS</bdi> = ערך דירוג מצב (1–5) &nbsp;·&nbsp; <bdi>Condition PI</bdi> = סמן דירוג מצב (0–100). הסבר מלא — במקטע "מקרא מונחים ואופן החישוב".
+</div>`;
+
 function xlsxPdfScoreFooterHtml(footer) {
-  return xlsxPdfResultPanel("ערך דירוג מצב המבנה", [
+  return CALC_LEGEND_HTML + xlsxPdfResultPanel("ערך דירוג מצב המבנה", [
       ["SCSAV=", "sum(Eci·Eif)/sum(Eif) =", footer.scsAv, 3],
       ["SCSCRIT=", "max{Eci בדרגת חשיבות גבוהה מאוד} =", footer.scsCrit, 3],
     ]) + xlsxPdfResultPanel("ערך סמן דירוג מצב המבנה", [
@@ -1078,6 +1170,9 @@ function buildXlsxStyleSections(state, result) {
   const sections = [];
   const compParts = xlsxPdfComponentsTableParts(state);
   sections.push({ title: `חלוקה לרכיבים — ${esc(state.name || state.number || "ללא שם")}`, thead: compParts.thead, rows: compParts.rows, footerHtml: "" });
+  // מקרא המונחים — לפני גיליון החישוב הראשון, כדי שכל סימון בגיליונות יהיה מוסבר
+  const gl = calcGlossaryTableParts(STRUCTURE_CLASSES[state.structureClass].dimLabel, "xgl");
+  sections.push({ title: "מקרא מונחים ואופן החישוב", thead: gl.thead, rows: gl.rows, footerHtml: "" });
 
   if (result.singleUnit) {
     let idx = 0;

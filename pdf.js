@@ -37,7 +37,9 @@ const PdfExport = (() => {
 
   // --- כותרת חוזרת בראש כל עמוד (שם/מספר מבנה, סוקר, חברה, דף N מתוך M) ---
   // "דו"ח סקירה" מופיע רק בעמוד הראשון, מעל הטבלה החוזרת — כך גם במקור
-  function govHeaderHTML(state, pageNum, totalPages) {
+  // reportTitle: הכותרת שבשורת הלוגואים — "דו"ח סקירה" כברירת מחדל, "תקציר
+  // מנהלים" בתקציר (אותה כותרת בדיוק, כדי ששני המסמכים ייראו מאותו הבית)
+  function govHeaderHTML(state, pageNum, totalPages, reportTitle) {
     // לוגו החברה (קבוע, logo.jpeg) בפינה הימנית, לוגואי מזמין העבודה
     // (state.clientLogos, אחד או כמה) בפינה השמאלית — עמוד 1 בלבד. תיבה
     // ריקה בצד שמאל גם כשאין לוגו למזמין, כדי שהכותרת תישאר ממורכזת
@@ -45,7 +47,7 @@ const PdfExport = (() => {
       `<div class="gov-logo-box"><img src="${esc(url)}"></div>`).join("");
     const title = pageNum === 1 ? `<div class="gov-title-row">
       <div class="gov-logo-box gov-logo-ours"><img src="logo.jpeg"></div>
-      <div class="gov-report-title">דו"ח סקירה</div>
+      <div class="gov-report-title">${esc(reportTitle || 'דו"ח סקירה')}</div>
       <div class="gov-logo-group">${clientLogos || '<div class="gov-logo-box"></div>'}</div>
     </div>` : "";
     return `${title}<table class="gov-head">
@@ -634,24 +636,80 @@ const PdfExport = (() => {
     }
   }
 
+  // --- תקציר מנהלים: פריסת העמוד (בפיקסלים של עמוד A4 לאורך) ---
+  // SUM_PAD_X = שוליים לצדדים, SUM_PAD_TOP = מעל כותרת העמוד, SUM_GAP = בין
+  // הכותרת לתוכן, SUM_FOOTER = שורת התחתית (קו + הסתייגות) בתחתית כל עמוד
+  const SUM_PAD_X = 28, SUM_PAD_TOP = 22, SUM_GAP = 10, SUM_FOOTER = 44;
+  const SUM_CONTENT_W = PORTRAIT_W_PX - SUM_PAD_X * 2;
+
   // שורת תחתית לעמוד בתקציר המנהלים: קו מפריד, ההסתייגות (SUMMARY_DISCLAIMER)
-  // מימין ומספר העמוד משמאל. נכתבת ישירות על קנבס העמוד (לא כחלק מהזרימה),
-  // כך שהיא בתחתית כל עמוד בדיוק, ובגודל קבוע גם כשהתוכן הוקטן
+  // מימין ו"דף N מתוך M" משמאל, באותו גופן כמו שאר הדוח. נכתבת ישירות על קנבס
+  // העמוד, כך שהיא בתחתית כל עמוד בדיוק, ובגודל קבוע גם כשהתוכן הוקטן
   function drawSummaryFooter(ctx, pageNo, total) {
-    const S = SCALE, pad = 32 * S, y = (PORTRAIT_H_PX - 22) * S;
+    const S = SCALE, x0 = SUM_PAD_X * S, x1 = (PORTRAIT_W_PX - SUM_PAD_X) * S, y = (PORTRAIT_H_PX - 20) * S;
     ctx.save();
-    ctx.strokeStyle = "#c9ced3"; ctx.lineWidth = S;
-    ctx.beginPath(); ctx.moveTo(pad, y - 14 * S); ctx.lineTo(PORTRAIT_W_PX * S - pad, y - 14 * S); ctx.stroke();
-    ctx.fillStyle = "#57606a";
-    ctx.font = `${10.5 * S}px "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif`;
+    ctx.strokeStyle = "#000"; ctx.lineWidth = S;
+    ctx.beginPath(); ctx.moveTo(x0, y - 15 * S); ctx.lineTo(x1, y - 15 * S); ctx.stroke();
+    ctx.fillStyle = "#000";
+    ctx.font = `${11 * S}px Arial, "Segoe UI", "Noto Sans Hebrew", sans-serif`;
     ctx.direction = "rtl"; ctx.textAlign = "right";
-    ctx.fillText(SUMMARY_DISCLAIMER, PORTRAIT_W_PX * S - pad, y);
-    ctx.direction = "rtl"; ctx.textAlign = "left";
-    ctx.fillText(`עמוד ${pageNo} מתוך ${total}`, pad, y);
+    ctx.fillText(SUMMARY_DISCLAIMER, x1, y);
+    ctx.textAlign = "left";
+    ctx.fillText(`דף ${pageNo} מתוך ${total}`, x0, y);
     ctx.restore();
   }
 
-  // --- ייצוא "תקציר מנהלים": מסמך נפרד, לאורך — מדי מהירות + רכיב קריטי ---
+  // התקציר בנוי כמכתב: בעמוד 1 נייר מכתבים (לוגו החברה מימין, לוגואי המזמין
+  // ותאריך ההפקה משמאל, קו מתחת), אחריו "לכבוד" (כשהוזן מזמין), שורת "הנדון"
+  // ופרטי המבנה העיקריים — ורק אז המקטעים. בשאר העמודים: כותרת רצה מצומצמת
+  function summaryLetterheadHTML() {
+    const today = fmtDateDMY(new Date());
+    const clientLogos = (state.clientLogos || []).map((url) =>
+      `<div class="gov-logo-box"><img src="${esc(url)}"></div>`).join("");
+    const kv = (label, val) => `<th>${esc(label)}:</th><td>${val}</td>`;
+    const ltr = (v) => `<span dir="ltr">${esc(v)}</span>`;
+    const survey = (state.surveyType || "").trim();
+    const surveyTxt = survey ? (survey.startsWith("סקירה") ? survey : "סקירה " + survey) : "סקירה";
+    const pairs = [
+      ["שם המבנה", esc(state.name || "—")], ["מספר המבנה", ltr(state.number || "—")],
+      ["סיווג ראשי", esc(STRUCTURE_CLASSES[state.structureClass].label)], ["מספר מפתחים", String(state.spans.length)],
+      ["סוג הסקירה", esc(state.surveyType || "—")], ["תאריך הסקירה", esc(fmtIsoDate(state.inspDate) || "—")],
+      ["שם הסוקר", esc(state.surveyorName || "—")], ["שם החברה", esc(state.companyName || "—")],
+    ];
+    if ((state.roadNumber || "").trim()) pairs.push(["כביש מס'", ltr(state.roadNumber)]);
+    let rows = "";
+    for (let i = 0; i < pairs.length; i += 2) {
+      rows += `<tr>${kv(...pairs[i])}${pairs[i + 1] ? kv(...pairs[i + 1]) : "<th></th><td></td>"}</tr>`;
+    }
+    return `<div class="sl-top">
+        <div class="gov-logo-box sl-logo"><img src="logo.jpeg"></div>
+        <div class="sl-top-left">
+          ${clientLogos ? `<div class="gov-logo-group">${clientLogos}</div>` : ""}
+          <div class="sl-date">תאריך: <span dir="ltr">${today}</span></div>
+        </div>
+      </div>
+      <div class="sl-rule"></div>
+      ${(state.client || "").trim() ? `<div class="sl-to">לכבוד<br><strong>${esc(state.client)}</strong></div>` : ""}
+      <div class="sl-subject">הנדון: <u>תקציר מנהלים — ${esc(state.name || "ללא שם")}</u></div>
+      <div class="sl-subtitle">דוח ${esc(surveyTxt)} · מבנה מספר <span dir="ltr">${esc(state.number || "—")}</span></div>
+      <table class="sl-details">${rows}</table>`;
+  }
+  function summaryRunningHeadHTML() {
+    return `<div class="sl-running">
+        <span>תקציר מנהלים — ${esc(state.name || "ללא שם")}${state.number ? ` (<span dir="ltr">${esc(state.number)}</span>)` : ""}</span>
+        <span dir="ltr">${fmtDateDMY(new Date())}</span>
+      </div>`;
+  }
+  function summaryHeadEl(pageNum) {
+    const el = document.createElement("div");
+    el.className = "summary-pdf-head";
+    el.style.width = SUM_CONTENT_W + "px";
+    el.innerHTML = pageNum === 1 ? summaryLetterheadHTML() : summaryRunningHeadHTML();
+    document.body.appendChild(el);
+    return el;
+  }
+
+  // --- ייצוא "תקציר מנהלים": מסמך נפרד, לאורך, עד 2 עמודים ---
   async function exportSummary() {
     if (!hasAnyComponents()) { alert("אין נתונים לייצוא — הוסף רכיבים תחילה."); return; }
     const input = buildEngineInput();
@@ -660,51 +718,65 @@ const PdfExport = (() => {
     const plan = summary.totalScored ? Calc.improvementPlan(input, result, summary, { safetyKeys: safetyComponentKeys(state) }) : null;
     const el = document.createElement("div");
     el.id = "pdf-summary";
-    // לוגואים כמו בעמוד הראשון של דוח הסקירה: החברה מימין, המזמין משמאל
-    // (תיבה ריקה כשאין לוגו למזמין, כדי שהכותרת תישאר ממורכזת)
-    const clientLogos = (state.clientLogos || []).map((url) =>
-      `<div class="gov-logo-box"><img src="${esc(url)}"></div>`).join("");
-    el.innerHTML = `
-      <div class="summary-title-row">
-        <div class="gov-logo-box"><img src="logo.jpeg"></div>
-        <h1>תקציר מנהלים</h1>
-        <div class="gov-logo-group">${clientLogos || '<div class="gov-logo-box"></div>'}</div>
-      </div>
-      <p class="pdf-sub">${esc(state.name || "ללא שם")}${state.number ? ` · <span dir="ltr">${esc(state.number)}</span>` : ""}
-        · הופק בתאריך ${fmtDateDMY(new Date())}</p>
-      ${renderSummary(state, result, summary, plan)}`;
-    // ההסתייגות מודפסת כשורת תחתית בכל עמוד (ר' drawFooter) ולא בסוף הזרימה
+    el.style.width = SUM_CONTENT_W + "px";
+    el.innerHTML = renderSummary(state, result, summary, plan);
+    // ההסתייגות מודפסת כשורת תחתית בכל עמוד (ר' drawSummaryFooter) ולא בסוף הזרימה
     const inlineDisclaimer = el.querySelector(".summary-disclaimer");
     if (inlineDisclaimer) inlineDisclaimer.remove();
     document.body.appendChild(el);
+    const heads = [];
     try {
       await decodeImages(el);
       fitImages(el);
+      // גובה הכותרת: בעמוד 1 (עם שורת הלוגואים) ובשאר העמודים
+      const probe1 = summaryHeadEl(1), probeN = summaryHeadEl(2);
+      await decodeImages(probe1);
+      const headH = [probe1.getBoundingClientRect().height, probeN.getBoundingClientRect().height];
+      probe1.remove(); probeN.remove();
+
       // נקודות חיתוך מותרות: תחתית כל בלוק ברמה העליונה וכל שורת טבלה — כך
-      // שמעבר עמוד לעולם לא חוצה שורה/פסקה/מד. כותרות ושורות כותרת של טבלה
-      // אינן נקודת חיתוך, כדי שלא יישארו לבד בתחתית עמוד.
+      // שמעבר עמוד לעולם לא חוצה שורה/פסקה/מד. לא נקודת חיתוך: כותרת מקטע,
+      // שורת כותרת של טבלה, ופסקת פתיחה של טבלה (.summary-keep) — כדי שאף
+      // אחת מהן לא תישאר לבד בתחתית עמוד, מנותקת ממה שהיא מציגה.
+      // טבלה שנחתכה ממשיכה בעמוד הבא עם שורת הכותרת שלה, כמו בדוח הסקירה.
       // f = מקדם הקטנה: התקציר מוגבל ל-2 עמודים; אם התוכן ארוך יותר, מרחיבים
       // את המיכל (התוכן זורם לרוחב ומתקצר) ומקטינים את התמונה בחזרה לרוחב
-      // העמוד — הקטנה אחידה של הכל, עד 60% לכל היותר
-      // FOOTER = גובה שורת התחתית (הסתייגות + מספר עמוד), בפיקסלים של העמוד —
-      // לא מוקטנת עם f, כדי שתישאר קריאה גם כשהתוכן הוקטן
-      const MAX_PAGES = 2, MARGIN = 28, FOOTER = 34;
+      // העמוד — הקטנה אחידה של התוכן, עד 60% לכל היותר. הכותרת והתחתית לא
+      // מוקטנות
+      const MAX_PAGES = 2;
       const layout = (f) => {
         const top = el.getBoundingClientRect().top;
-        const breaks = [...el.querySelectorAll(":scope > *, .summary-block > *, tr")]
-          .filter((n) => !/^H[1-4]$/.test(n.tagName) && !(n.tagName === "TR" && n.querySelector("th")))
+        const breaks = [...el.querySelectorAll(".summary-block > *, tr")]
+          .filter((n) => !n.classList.contains("gov-section-title") && !n.classList.contains("summary-keep")
+            && !(n.tagName === "TR" && n.querySelector("th"))
+            // טבלה קצרה (עד 4 שורות) לא נחתכת — עוברת לעמוד הבא בשלמותה
+            && !(n.tagName === "TR" && n.closest("table").querySelectorAll("tbody > tr").length <= 4))
           .map((n) => n.getBoundingClientRect().bottom - top)
           .sort((x, y) => x - y);
-        // סוף התוכן בפועל (תחתית הבלוק האחרון), לא גובה המיכל — אחרת הריפוד
-        // התחתון של המיכל לבדו יוצר עמוד ריק נוסף בסוף המסמך
+        const tables = [...el.querySelectorAll("table")].map((t) => {
+          const th = t.querySelector("thead");
+          if (!th) return null;
+          const r = t.getBoundingClientRect();
+          return { top: r.top - top, head: th.getBoundingClientRect().bottom - top, bottom: r.bottom - top };
+        }).filter(Boolean);
+        // ראש כל בלוק — עמוד חדש מתחיל בראש הבלוק הבא ולא ברווח שמעליו
+        // (אחרת מרווח העליון של כותרת מקטע נוסף לריווח שמתחת לכותרת העמוד)
+        const tops = [...el.querySelectorAll(".summary-block > *")].map((n) => n.getBoundingClientRect().top - top);
         const totalH = breaks.length ? breaks[breaks.length - 1] : el.getBoundingClientRect().height;
-        const pageH = PORTRAIT_H_PX / f, margin = MARGIN / f, footer = FOOTER / f;
         const slices = [];
         for (let start = 0; start < totalH - 1;) {
-          const room = pageH - footer - (slices.length ? margin : 0);
+          if (slices.length && !tables.some((t) => t.top < start - 1 && start < t.bottom - 1)) {
+            const next = tops.filter((t) => t >= start && t - start < 40).sort((a, c) => a - c)[0];
+            if (next != null) start = next;
+          }
+          const hh = headH[slices.length ? 1 : 0];
+          const avail = (PORTRAIT_H_PX - SUM_PAD_TOP - hh - SUM_GAP - SUM_FOOTER) / f;
+          const tbl = tables.find((t) => t.top < start - 1 && start < t.bottom - 1);
+          const rep = tbl ? [tbl.top, tbl.head] : null;
+          const room = avail - (rep ? rep[1] - rep[0] : 0);
           const fits = breaks.filter((y) => y > start + 1 && y <= start + room);
           const end = Math.min(totalH, fits.length ? fits[fits.length - 1] : start + room);
-          slices.push([start, end]);
+          slices.push({ start, end, rep });
           start = end;
         }
         return slices;
@@ -713,26 +785,42 @@ const PdfExport = (() => {
       let slices = layout(f);
       while (slices.length > MAX_PAGES && f > 0.605) {
         f = Math.round((f - 0.05) * 100) / 100;
-        el.style.width = Math.round(PORTRAIT_W_PX / f) + "px";
+        el.style.width = Math.round(SUM_CONTENT_W / f) + "px";
         slices = layout(f);
       }
+
       const canvas = await html2canvas(el, { scale: SCALE, backgroundColor: "#ffffff" });
       const pdf = new jspdf.jsPDF("p", "mm", "a4");
-      const pageW = PORTRAIT_W_PX * SCALE;
-      slices.forEach(([y0, y1], p) => {
+      const S = SCALE, x = SUM_PAD_X * S, w = SUM_CONTENT_W * S;
+      // מעתיק רצועה [y0,y1] מקנבס הזרימה לעמוד בגובה destY; מחזיר את הגובה שצויר
+      const strip = (ctx, y0, y1, destY) => {
+        const sy = Math.round(y0 * S), sh = Math.round((y1 - y0) * S), dh = Math.round(sh * f);
+        ctx.drawImage(canvas, 0, sy, canvas.width, sh, x, destY, w, dh);
+        return dh;
+      };
+      for (let p = 0; p < slices.length; p++) {
         const page = document.createElement("canvas");
-        page.width = pageW; page.height = PORTRAIT_H_PX * SCALE;
+        page.width = PORTRAIT_W_PX * S; page.height = PORTRAIT_H_PX * S;
         const ctx = page.getContext("2d");
         ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, page.width, page.height);
-        const sy = Math.round(y0 * SCALE), sh = Math.round((y1 - y0) * SCALE);
-        ctx.drawImage(canvas, 0, sy, canvas.width, sh, 0, p ? MARGIN * SCALE : 0, pageW, Math.round(sh * f));
+        const head = summaryHeadEl(p + 1);
+        heads.push(head);
+        await decodeImages(head);
+        fitImages(head);
+        const headCanvas = await html2canvas(head, { scale: S, backgroundColor: "#ffffff" });
+        ctx.drawImage(headCanvas, x, SUM_PAD_TOP * S);
+        let y = (SUM_PAD_TOP + headH[p ? 1 : 0] + SUM_GAP) * S;
+        const { start, end, rep } = slices[p];
+        if (rep) y += strip(ctx, rep[0], rep[1], y);
+        strip(ctx, start, end, y);
         drawSummaryFooter(ctx, p + 1, slices.length);
         if (p) pdf.addPage();
         pdf.addImage(page.toDataURL("image/jpeg", JPEG_QUALITY), "JPEG", 0, 0, PORTRAIT_W_MM, PORTRAIT_H_MM);
-      });
+      }
       pdf.save(`תקציר מנהלים - ${state.name || state.number || "ללא שם"}.pdf`);
     } finally {
       el.remove();
+      heads.forEach((h) => h.remove());
     }
   }
 
