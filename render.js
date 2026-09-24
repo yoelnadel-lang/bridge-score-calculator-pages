@@ -298,9 +298,6 @@ function renderControlAudit(state, result, forPdf) {
     <li>רכיבי המפתח משוקללים יחד לציון <strong>SCS</strong>.</li>
     <li>ה-SCS מומר לציון <strong>Condition PI</strong> (משוואות 8.1–8.2).</li>
   </ol>
-  <h3>מקרא מונחים ואופן החישוב</h3>
-  ${(() => { const gl = calcGlossaryTableParts(dimLabel, "xgl");
-    return `<table class="spans-table audit-table calc-glossary">${gl.thead}<tbody>${gl.rows.join("")}</tbody></table>`; })()}
   ${forPdf ? "" : `<p class="hint">המסך הזה אינו מודפס במלואו — לייצוא מלא ומעוצב של הבקרה, לרבות כל הנוסחאות
     וההצבות, יש להשתמש בכפתור "🧮 ייצוא חישוב ציון".</p>`}`;
 
@@ -1093,67 +1090,8 @@ function xlsxPdfScoreTableParts(pairs, showSpanCol) {
     </tr></thead>`;
   return { thead, rows };
 }
-// --- מקרא מונחים: הסבר לכל סימון שמופיע בגיליונות החישוב — משמעות, אופן
-// החישוב והמקור ב"הנחיות להערכת המצב המבני" (מהדורה 9). משותף ל-PDF החישוב
-// (מקטע נפרד) ולבקרה (לשונית + ייצוא "חישוב ציון"). הערכים המספריים בטבלה
-// (מקדמי B ו-Eif, ערכי ההיקף) נלקחים מ-IMPORTANCE/EXTENT ולא מוקלדים בנפרד
-function calcGlossaryRows(dimLabel) {
-  const f = (s) => `<span dir="ltr">${s}</span>`;
-  const byImp = (key) => Object.values(IMPORTANCE).map((d) => `${fmt(d[key], 1)} (${d.label})`).join(", ");
-  const exVals = Object.entries(EXTENT).map(([k, d]) => `${k} = ${fmt(d.value, 1)}`).join("; ");
-  return [
-    ["S", "דרגת חומרה<div class=\"xgl-en\" dir=\"ltr\">Severity</div>",
-      "חומרת הפגם, בסולם 1–5: 1 — כמו חדש; 2 — הידרדרות ראשונית; 3 — פגם בינוני; 4 — פגם חמור; 5 — כשל.",
-      "נקבעת בשטח על ידי הסוקר לכל פגם; לרכיב נלקחת החומרה המרבית.", "טבלה 7"],
-    ["Ex", "היקף הנזק<div class=\"xgl-en\" dir=\"ltr\">Extent</div>",
-      "החלק היחסי של הרכיב שנפגע: A — ללא נזק משמעותי; B — עד 5%; C — 5%–20%; D — 20%–50%; E — מעל 50%.",
-      `ערך מספרי: ${f(exVals)}.`, "טבלה 8"],
-    ["חשיבות", "סיווג חשיבות הרכיב",
-      "מידת החיוניות של הרכיב לתפקוד המבנה ולבטיחותו: גבוהה מאוד, גבוהה, בינונית, נמוכה.",
-      "לפי קטלוג הרכיבים (אוגדן חלוקה ומספור רכיבים); קובע את Ecf ואת Eif.", "טבלאות 12–13"],
-    ["Ecs", "ציון מצב הרכיב<div class=\"xgl-en\" dir=\"ltr\">Element Condition Score</div>",
-      "ציון המצב הבסיסי של הרכיב בסולם 1–5, לפני התחשבות בחשיבותו.",
-      `${f("Ecs = S + Ex")} — ערך ההיקף הממוצע של תתי-הרכיבים בחומרה המרבית, משוקלל לפי גודלם; כאשר ${f("S = 5")}: ${f("Ecs = 5.0")}.`, "טבלה 11"],
-    ["Ecf", "מקדם תיקון החשיבות<div class=\"xgl-en\" dir=\"ltr\">Element Condition Factor</div>",
-      "הפחתה מציון המצב של רכיב שאינו בחשיבות \"גבוהה מאוד\". ההפחתה קטנה ככל שמצב הרכיב מחמיר, ומתאפסת בכשל.",
-      `${f("Ecf = B − (Ecs − 1) · B / 4")}; מקדם הבסיס B: ${byImp("ecfBase")}.`, "טבלה 12"],
-    ["Eci", "ציון המצב המתוקן<div class=\"xgl-en\" dir=\"ltr\">Element Condition Index</div>",
-      "ציון מצב הרכיב לאחר התחשבות בחשיבותו — הערך שנכנס לחישוב ציון המבנה.",
-      `${f("Eci = Ecs − Ecf")}, ולא פחות מ-1.`, "משוואה 5"],
-    ["Eif", "מקדם משקל החשיבות<div class=\"xgl-en\" dir=\"ltr\">Element Importance Factor</div>",
-      "משקל הרכיב בממוצע המשוקלל של המפתח.",
-      `${byImp("eif")}.`, "טבלה 13"],
-    ["SCSav", "ערך דירוג מצב ממוצע<div class=\"xgl-en\" dir=\"ltr\">Structure Condition Score</div>",
-      "מצב המפתח או המבנה בכללותו, בסולם 1–5.",
-      `למפתח: ${f("SCSav = Σ(Eci · Eif) / ΣEif")}. במבנה בן 3 מפתחים ומעלה: ממוצע ערכי המפתחים, משוקלל לפי ${esc(dimLabel)}.`, "משוואות 6.1, 6.2"],
-    ["SCScrit", "ערך דירוג מצב קריטי",
-      "מצב הרכיב הגרוע ביותר מבין הרכיבים בחשיבות \"גבוהה מאוד\", בסולם 1–5.",
-      `${f("SCScrit = max(Eci)")} של הרכיבים בחשיבות "גבוהה מאוד", בכל המפתחים.`, "משוואה 7"],
-    ["Condition PI", "סמן דירוג מצב המבנה<div class=\"xgl-en\" dir=\"ltr\">CPIav / CPIcrit</div>",
-      "המרת ערך הדירוג לסולם 0–100 (100 — מבנה כמו חדש). משמעות הציון לפי טבלה 15.",
-      `${f("CPI = 100 − 2 · (SCS² + 6.5 · SCS − 7.5)")}, בנפרד ל-SCSav ול-SCScrit.`, "משוואות 8.1, 8.2"],
-    ["Deck Area", "מימד השקלול של המפתח",
-      `${esc(dimLabel)} — משמש לשקלול המפתחים במבנה בן 3 מפתחים ומעלה.`,
-      "נמדד לכל מפתח.", "סעיף 03.2.8"],
-  ];
-}
-function calcGlossaryTableParts(dimLabel, cellClass) {
-  const c = cellClass ? ` class="${cellClass}"` : "";
-  const w = (pct) => ` style="width:${pct}%"`;
-  const thead = `<thead><tr><th${c}${w(8)}>סימון</th><th${c}${w(17)}>מונח</th><th${c}${w(32)}>משמעות</th><th${c}${w(33)}>אופן החישוב</th><th${c}${w(10)}>מקור בהנחיות</th></tr></thead>`;
-  const rows = calcGlossaryRows(dimLabel).map(([sym, name, meaning, calc, src]) =>
-    `<tr><td${c}><strong dir="ltr">${esc(sym)}</strong></td><td${c}>${name}</td><td${c}>${meaning}</td><td${c}>${calc}</td><td${c}>${src}</td></tr>`);
-  return { thead, rows };
-}
-// שורת מקרא מקוצרת מתחת לכל גיליון חישוב (כמו המקרא S/Ex בדוח הסקירה)
-const CALC_LEGEND_HTML = `<div class="gov-legend xlsx-pdf-legend">
-  <bdi>Ecs</bdi> = ציון מצב הרכיב &nbsp;·&nbsp; <bdi>Ecf</bdi> = מקדם תיקון החשיבות &nbsp;·&nbsp;
-  <bdi>Eci</bdi> = ציון המצב המתוקן (<bdi>Ecs − Ecf</bdi>) &nbsp;·&nbsp; <bdi>Eif</bdi> = מקדם משקל החשיבות &nbsp;·&nbsp;
-  <bdi>SCS</bdi> = ערך דירוג מצב (1–5) &nbsp;·&nbsp; <bdi>Condition PI</bdi> = סמן דירוג מצב (0–100). הסבר מלא — במקטע "מקרא מונחים ואופן החישוב".
-</div>`;
-
 function xlsxPdfScoreFooterHtml(footer) {
-  return CALC_LEGEND_HTML + xlsxPdfResultPanel("ערך דירוג מצב המבנה", [
+  return xlsxPdfResultPanel("ערך דירוג מצב המבנה", [
       ["SCSAV=", "sum(Eci·Eif)/sum(Eif) =", footer.scsAv, 3],
       ["SCSCRIT=", "max{Eci בדרגת חשיבות גבוהה מאוד} =", footer.scsCrit, 3],
     ]) + xlsxPdfResultPanel("ערך סמן דירוג מצב המבנה", [
@@ -1170,9 +1108,6 @@ function buildXlsxStyleSections(state, result) {
   const sections = [];
   const compParts = xlsxPdfComponentsTableParts(state);
   sections.push({ title: `חלוקה לרכיבים — ${esc(state.name || state.number || "ללא שם")}`, thead: compParts.thead, rows: compParts.rows, footerHtml: "" });
-  // מקרא המונחים — לפני גיליון החישוב הראשון, כדי שכל סימון בגיליונות יהיה מוסבר
-  const gl = calcGlossaryTableParts(STRUCTURE_CLASSES[state.structureClass].dimLabel, "xgl");
-  sections.push({ title: "מקרא מונחים ואופן החישוב", thead: gl.thead, rows: gl.rows, footerHtml: "" });
 
   if (result.singleUnit) {
     let idx = 0;

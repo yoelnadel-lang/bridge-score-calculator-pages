@@ -459,12 +459,6 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
 /* כותרת המקטע בעמודי החישוב — מסגרת בלי המילוי האפור של דוח הסקירה */
 .xlsx-calc-page .gov-section-title { background: none; border: 1px solid #000; }
 .xlsx-pdf-formula { direction: ltr; }
-/* מקרא המונחים — טקסט הסבר, ולכן מיושר לימין ובגופן קריא יותר משאר הגיליון */
-.xlsx-pdf-table th.xgl, .xlsx-pdf-table td.xgl { font-size: 12px; text-align: right; vertical-align: top; padding: 4px 6px; }
-.xlsx-pdf-table th.xgl { text-align: center; }
-.xlsx-pdf-legend { margin: 2px 0 4px; }
-.xgl-en { font-size: .85em; color: #333; text-align: right; }
-.calc-glossary td { text-align: right; vertical-align: top; }
 
 /* דוח סקירה PDF — פורמט רשמי, A4 לרוחב, עמוד = div נפרד (לא קנבס ארוך שנחתך),
    כך שכותרת המבנה ומספור העמוד חוזרים אמיתית על כל עמוד. */
