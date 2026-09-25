@@ -140,10 +140,11 @@ function idCardAutoFields(groupId, state, result) {
   }
   if (groupId === "indices") {
     const freq = state.inspClass !== "" && state.inspClass != null ? INSPECTION_FREQUENCIES[+state.inspClass] : null;
+    const sc = surveyClassEntry(state.surveyClass);
     return [
       { code: "10.1", label: "Condition PIav", value: result ? fmt(result.bridge.method_norm.cpiAv) : "—" },
       { code: "10.2", label: "Condition PIcrit", value: result ? fmt(result.bridge.cpiCrit) : "—" },
-      { code: "13.1", label: "סיווג לסקירה", value: freq ? freq.label : "—" },
+      { code: "13.1", label: "סיווג לסקירה", value: sc ? sc.label : freq ? freq.label : "—" },
       { code: "13.2", label: "תאריך ביצוע סקירה (קודמת)", value: fmtIsoDate(state.prevInspDate) },
       { code: "13.3", label: "תאריך ביצוע סקירה (נוכחית)", value: fmtIsoDate(state.inspDate) },
       { code: "13.4", label: "תדירות ביצוע סקירה שגרתית [חודש]", value: DEFAULT_NEXT_INSPECTION_MONTHS },
@@ -735,47 +736,45 @@ function renderResults(state, result) {
   return html;
 }
 
-// --- מד מהירות (0–100) — קשת צבועה לפי טווחי טבלה 15, מחט על הציון ---
-// title/subtitle: HTML מוכן מראש (לא נמלט כאן) — כך שקריאה יכולה לעטוף
+// --- "מדרגות מצב": חמש דרגות הסיווג של טבלה 15 כעמודות עולות, מתחת לכל
+// עמודה שם הסיווג וטווח הציונים שלו; המבנה ממלא את העמודות עד הדרגה שלו.
+// מחליף את מד המהירות — תצוגה שקטה ומדויקת יותר, בשפת הדוחות (אפור/שחור).
+// title: HTML מוכן מראש (לא נמלט כאן) — כך שקריאה יכולה לעטוף
 // מונחים באנגלית ב-<bdi> למניעת בלבול bidi מול הטקסט העברי הסמוך, בלי
-// ש-esc() ימחק את התגית. שני הקוראים היחידים (renderSummary) מעבירים
-// מחרוזות קבועות בקוד, לא נתוני משתמש — אין כאן סיכון הזרקה
-function gaugeSVG(value, bands, meaningRow, title, subtitle) {
-  const cx = 110, cy = 104, r = 86, W = 220, H = 118;
-  const pt = (v, rad) => {
-    const a = Math.PI * (1 - Math.max(0, Math.min(100, v)) / 100);  // 0→שמאל, 100→ימין
-    return [cx + rad * Math.cos(a), cy - rad * Math.sin(a)];
-  };
+// ש-esc() ימחק את התגית. הקורא היחיד (renderSummary) מעביר מחרוזות קבועות
+// בקוד, לא נתוני משתמש — אין כאן סיכון הזרקה
+function scoreStepsHTML(value, bands, meaningRow, title) {
   const asc = [...bands].sort((a, b) => a.min - b.min);
-  let segs = "";
-  asc.forEach((band, i) => {
-    const from = band.min, to = i + 1 < asc.length ? asc[i + 1].min : 100;
-    const [x1, y1] = pt(from, r), [x2, y2] = pt(to, r);
-    segs += `<path d="M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${r} ${r} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}"
-      fill="none" stroke="${band.color}" stroke-width="18"/>`;
-  });
-  let ticks = "";
-  for (const v of [0, ...asc.map((b) => b.min).filter((m) => m > 0), 100]) {
-    const [tx, ty] = pt(v, r + 16);
-    ticks += `<text x="${tx.toFixed(1)}" y="${(ty + 3).toFixed(1)}" text-anchor="middle" font-size="10" fill="#57606a">${v}</text>`;
-  }
   const has = value != null && !isNaN(value);
-  let needle = "";
-  if (has) {
-    const [nx, ny] = pt(value, r - 20);
-    needle = `<line x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}"
-        stroke="#1f2328" stroke-width="4" stroke-linecap="round"/>
-      <circle cx="${cx}" cy="${cy}" r="6" fill="#1f2328"/>`;
-  }
-  const color = meaningRow ? meaningRow.color : "#999";
-  return `<div class="gauge">
-    <div class="gauge-title">${title}</div>
-    <div class="gauge-sub">${subtitle || ""}</div>
-    <svg viewBox="0 0 ${W} ${H}" dir="ltr" xmlns="http://www.w3.org/2000/svg">${segs}${ticks}${needle}</svg>
-    <div class="gauge-value" dir="ltr" style="color:${color}">${fmt(value)}<span class="gauge-of"> / 100</span></div>
-    <div class="gauge-name" style="color:${color}">${meaningRow ? esc(meaningRow.name) : "הזן מימד שקלול לכל מפתח"}</div>
-    ${meaningRow ? `<div class="gauge-meaning">${esc(meaningRow.text)}</div>` : ""}
+  const level = meaningRow ? asc.findIndex((b) => b.name === meaningRow.name) : -1;
+  const cols = asc.map((band, i) => {
+    const to = i + 1 < asc.length ? asc[i + 1].min : 100;
+    const cls = i === level ? "ss-bar ss-cur" : i < level ? "ss-bar ss-on" : "ss-bar";
+    return `<div class="ss-col${i === level ? " ss-col-cur" : ""}">
+      <div class="ss-track"><div class="${cls}" style="height:${30 + i * 21}px"></div></div>
+      <div class="ss-lbl">${esc(band.name)}</div>
+      <div class="ss-rng" dir="ltr">${band.min}–${to}</div>
+    </div>`;
+  }).join("");
+  return `<div class="score-steps">
+    <div class="ss-title">${title}</div>
+    <div class="ss-figure">
+      <span class="ss-value" dir="ltr">${has ? fmt(value) : "—"}<span class="ss-of"> / 100</span></span>
+      <span class="ss-name">${meaningRow ? esc(meaningRow.name) : "הזן מימד שקלול לכל מפתח"}</span>
+      ${level >= 0 ? `<span class="ss-level">דרגה ${level + 1} מתוך ${asc.length}</span>` : ""}
+    </div>
+    <div class="ss-bars" dir="ltr">${cols}</div>
+    ${meaningRow ? `<div class="ss-meaning">${summaryMeaningLines(meaningRow.text)}</div>` : ""}
   </div>`;
+}
+
+// משמעות הסיווג (טבלה 15) מתחת לעמודות: בלי הפתיח "המבנה במצב כללי "X";"
+// (הסיווג כבר מוצג בכרטיס), וכל חלק שמופרד ב-";" בשורה משלו, עם נקודה בסופו.
+// טבלאות MEANING_AV/CRIT עצמן לא משתנות — הן משמשות גם בלשונית התוצאות
+function summaryMeaningLines(text) {
+  return String(text || "").replace(/^המבנה במצב כללי "[^"]*";\s*/, "")
+    .split(/;\s*/).map((t) => t.trim()).filter(Boolean)
+    .map((t) => esc(/[.!?]$/.test(t) ? t : t + ".")).join("<br>");
 }
 
 // --- תקציר מנהלים ---
@@ -795,7 +794,7 @@ function summaryCompLabel(comp, catalogIds) {
   const cid = catalogIds.get(comp.key);
   return esc((cid != null ? cid + ". " : "") + comp.name);
 }
-const SUMMARY_DISCLAIMER = "המידע המוצג כאן אינו תחליף לייעוץ הנדסי של מתכנן שיקום, אלא נועד לתת הבנה כללית של מה נדרש לבצע.";
+const SUMMARY_DISCLAIMER = "המידע המוצג כאן אינו תחליף לייעוץ הנדסי של מתכנן שיקום.";
 const SUMMARY_SEVERITY_NAME ={ 2: "קל", 3: "בינוני", 4: "חמור", 5: "כשל" };
 
 // ציון מצטבר בתא הטבלה: הציון לאחר התיקון והשינוי מהשורה הקודמת בלבד (ה"לפני"
@@ -826,7 +825,7 @@ function renderSummary(state, result, summary, plan) {
   const iaText = (ia.text || "").trim(), iaPhoto = (ia.photo || "").trim();
   const hasIA = !!(iaText || iaPhoto);
   const spansTxt = (ids) => summarySpansText(ids, single, state.spans.length);
-  const sectionTitle = (n, t) => `<div class="gov-section-title summary-section-title">${n}. ${t}</div>`;
+  const sectionTitle = (n, t, cls) => `<div class="gov-section-title summary-section-title${cls ? " " + cls : ""}">${n}. ${t}</div>`;
   const meaningQ = (m) => (m ? ` — "${esc(m.name)}"` : "");
 
   let html = '<div class="summary-block">';
@@ -834,16 +833,17 @@ function renderSummary(state, result, summary, plan) {
   // [1] ציוני המבנה ומשמעותם — פסקת פתיחה (זיהוי המבנה + הסבר שני הציונים
   // והציון שהתקבל בכל אחד), ומתחתיה מדי המהירות עם משמעות כל ציון
   html += `${sectionTitle(1, "ציוני מצב המבנה ומשמעותם")}
-    <p class="summary-p">בהתאם למתודולוגיית נתיבי ישראל, מצב המבנה מוערך באמצעות שני מדדי <bdi>Condition PI</bdi>
-      בסולם 0–100: <strong>ציון ממוצע</strong> (<bdi>CPIav</bdi>) — ממוצע משוקלל של ציוני המצב של כל הרכיבים
-      שנסקרו, לפי דרגת חשיבותם; ו<strong>ציון קריטי</strong> (<bdi>CPIcrit</bdi>) — הנקבע לפי ציון המצב הגרוע ביותר
-      מבין הרכיבים בדרגת חשיבות "גבוהה מאוד". ציוני המבנה בסקירה הנוכחית: ציון ממוצע
-      <strong dir="ltr">${fmt(b.method_norm.cpiAv)}</strong>${meaningQ(b.meaningAv)}, וציון קריטי
-      <strong dir="ltr">${fmt(b.cpiCrit)}</strong>${meaningQ(b.meaningCrit)}. סיווג המצב בהתאם לטבלה 15
-      ב"הנחיות להערכת המצב המבני של גשרים, מנהרות ומבני דרך" (מהדורה 9):</p>
-    <div class="gauges">
-      ${gaugeSVG(b.method_norm.cpiAv, MEANING_AV, b.meaningAv, "<bdi>CPIav</bdi> — ציון ממוצע", "מצב המבנה בכללותו · משוואה 6.2")}
-      ${gaugeSVG(b.cpiCrit, MEANING_CRIT, b.meaningCrit, "<bdi>CPIcrit</bdi> — ציון קריטי", "הרכיב הקובע בדרגת חשיבות \"גבוהה מאוד\"")}
+    <p class="summary-p">בהתאם למתודולוגיית נתיבי ישראל, מצב המבנה מוערך באמצעות שני מדדי
+      <bdi>CPI (Condition Performance Indicator)</bdi> בסולם 0–100.</p>
+    <p class="summary-p summary-lines"><strong>ציון ממוצע</strong> (<bdi>CPIav</bdi>) — ממוצע משוקלל של ציוני המצב של כל
+      הרכיבים שנסקרו, לפי דרגת חשיבותם.<br>
+      <strong>ציון קריטי</strong> (<bdi>CPIcrit</bdi>) — הנקבע לפי ציון המצב הגרוע ביותר מבין הרכיבים בדרגת חשיבות "גבוהה מאוד".<br>
+      ציוני המבנה בסקירה הנוכחית:<br>
+      ציון ממוצע <strong dir="ltr">${fmt(b.method_norm.cpiAv)}</strong>${meaningQ(b.meaningAv)}.<br>
+      ציון קריטי <strong dir="ltr">${fmt(b.cpiCrit)}</strong>${meaningQ(b.meaningCrit)}.</p>
+    <div class="score-cards">
+      ${scoreStepsHTML(b.method_norm.cpiAv, MEANING_AV, b.meaningAv, "<bdi>CPIav</bdi> — ציון ממוצע")}
+      ${scoreStepsHTML(b.cpiCrit, MEANING_CRIT, b.meaningCrit, "<bdi>CPIcrit</bdi> — ציון קריטי")}
     </div>`;
 
   // ממצא לתשומת לב מיידית — מיד אחרי הציונים, באותה מסגרת אדומה כמו בדוח הסקירה
@@ -857,7 +857,8 @@ function renderSummary(state, result, summary, plan) {
 
   // [2] קביעת הציון — פסקה על הציון הממוצע, ופסקה על הציון הקריטי
   // שמובילה לטבלת הרכיבים הקובעים אותו
-  html += sectionTitle(2, "קביעת הציון — רכיבים ופגמים קובעים");
+  // מקטע 2 מתחיל תמיד בראש עמוד חדש ב-PDF (עמוד 1 מוקדש לציונים ומשמעותם)
+  html += sectionTitle(2, "קביעת הציון — רכיבים ופגמים קובעים", "summary-page-break");
   const contribs = summary.avContributions || [];
   const notSurveyedTxt = summary.notSurveyed.length
     ? ` ${summary.notSurveyed.length === 1 ? "רכיב אחד קיים במבנה אך סומן" : `${summary.notSurveyed.length} רכיבים קיימים במבנה אך סומנו`} "לא ניתן לסקירה" ולא ${summary.notSurveyed.length === 1 ? "נכלל" : "נכללו"} בחישוב הציון: ${summary.notSurveyed.map((c) => esc(c.name)).join("; ")}.`
@@ -869,9 +870,8 @@ function renderSummary(state, result, summary, plan) {
     const top = [...byName.entries()].sort((a, c) => c[1] - a[1]).slice(0, 3)
       .map(([name, v]) => `${esc(name)} (${Math.round((v / total) * 100)}%)`);
     const weak = summary.weakestSpan;
-    html += `<p class="summary-p"><strong>הציון הממוצע (<bdi>CPIav</bdi> = <span dir="ltr">${fmt(b.method_norm.cpiAv)}</span>)</strong>
-      מחושב כממוצע משוקלל של ציוני המצב של כל הרכיבים שנסקרו, לפי מקדמי החשיבות (טבלה 13)${
-      single ? "" : " ולפי שטח המפתחים (משוואה 6.2)"}. עיקר הפחתת הציון נובע מהרכיבים: ${top.join(", ")}.${
+    html += `<p class="summary-p"><strong>הציון הממוצע (<bdi>CPIav</bdi> = <span dir="ltr">${fmt(b.method_norm.cpiAv)}</span>):</strong>
+      עיקר הפחתת הציון נובע מהרכיבים: ${top.join(", ")}.${
       weak ? ` המפתח בעל הציון הנמוך ביותר: מפתח ${esc(weak.id)} (<bdi>CPIav</bdi> = <span dir="ltr">${fmt(weak.cpiAv)}</span>).` : ""}${notSurveyedTxt}</p>`;
   } else if (notSurveyedTxt) {
     html += `<p class="summary-p">${notSurveyedTxt.trim()}</p>`;
@@ -908,8 +908,7 @@ function renderSummary(state, result, summary, plan) {
       </tr>`;
     }).join("");
     const nComp = groups.size;
-    html += `<p class="summary-p summary-keep"><strong>הציון הקריטי (<bdi>CPIcrit</bdi> = <span dir="ltr">${fmt(b.cpiCrit)}</span>)</strong>
-      נקבע לפי ציון המצב המרבי מבין הרכיבים בדרגת חשיבות "גבוהה מאוד" (<bdi>Eci = ${fmt(b.scsCrit)}</bdi>).${
+    html += `<p class="summary-p summary-keep"><strong>הציון הקריטי (<bdi>CPIcrit</bdi> = <span dir="ltr">${fmt(b.cpiCrit)}</span>):</strong>${
       ties.length > 1 ? ` ציון זה מתקבל ${nComp > 1 ? `ב-${nComp} רכיבים` : "ברכיב אחד"}${ties.length > nComp ? ` וב-${ties.length} מיקומים במבנה` : ""}; לפיכך, שיקום של חלקם בלבד לא ישפר את הציון הקריטי, ונדרש טיפול בכל המיקומים.` : ""}
       הרכיבים והפגמים הקובעים את הציון הקריטי:</p>
       <table class="gov-table summary-table summary-crit">
@@ -921,18 +920,18 @@ function renderSummary(state, result, summary, plan) {
   // [3] טיפולים נדרשים — הפגמים שתיקונם נדרש לשיפור הציון (Calc.improvementPlan),
   // בתוספת ליקויי בטיחות ופגמים חמורים. הסדר: תשומת לב מיידית ← בטיחות
   // משתמשי הדרך ← חומרה ← השפעה על הציון. עמודת הציון מצטברת: הציון לאחר
-  // תיקון השורה וכל השורות שמעליה
-  html += sectionTitle(3, "טיפולים נדרשים והשפעתם הצפויה על ציון המבנה");
+  // תיקון השורה וכל השורות שמעליה. הנוסחים (פתיח, עמודות, שורת הסיום) לפי
+  // תיקוני המשתמש בקובץ "תקציר מנהלים לתיקון"
+  html += sectionTitle(3, "טיפולים נדרשים והשפעתם הצפויה על ציון המבנה", "summary-section-gap");
   const groups3 = plan ? plan.groups : [];
   if (!plan) {
     html += `<p class="hint">תוכנית הטיפול מחושבת בעת פתיחת לשונית התקציר או ייצוא ה-PDF.</p>`;
   } else if (groups3.length || hasIA) {
     const rows = [];
     if (hasIA) {
-      rows.push(`<tr class="summary-prio-urgent">
-        <td>מיידית</td>
-        <td>⚠ תשומת לב מיידית</td>
+      rows.push(`<tr>
         <td>${esc(iaText || "—")}${iaPhoto ? `<div class="summary-sub">קוד תמונה: <bdi>${esc(iaPhoto)}</bdi></div>` : ""}</td>
+        <td><span class="summary-urgent">⚠ תשומת לב מיידית</span></td>
         <td>התרעה מיידית בכתב, תוך 12 שעות מסיום הסקירה, למנהל תחום אחזקת גשרים.</td>
         <td class="summary-num">—</td>
       </tr>`);
@@ -947,24 +946,24 @@ function renderSummary(state, result, summary, plan) {
       }
       const where = [...byComp.values()].map(({ comp, spans }) =>
         `${summaryCompLabel(comp, catalogIds)}${single ? "" : ` <span class="summary-sub-inline">(${esc(spansTxt(spans))})</span>`}`).join("<br>");
-      const prio = g.s >= 5 ? "מיידית" : (g.s === 4 || g.isSafety) ? "גבוהה" : g.s === 3 ? "רגילה" : "שוטפת";
-      const urgent = g.s >= 5 || g.isSafety;
-      rows.push(`<tr${urgent ? ' class="summary-prio-urgent"' : ""}>
-        <td>${prio}${g.isSafety ? `<div class="summary-safety-tag">⚠ בטיחות משתמשי הדרך</div>` : ""}</td>
-        <td>${summaryDefectLabel(g.def)}<div class="summary-sub">חומרה ${g.sMin < g.s ? `<span dir="ltr">${g.sMin}–${g.s}</span>` : `${g.s}${SUMMARY_SEVERITY_NAME[g.s] ? " — " + esc(SUMMARY_SEVERITY_NAME[g.s]) : ""}`}</div></td>
+      // עמודת "דרגת עדיפות" הוסרה (הסדר עצמו הוא העדיפות); תגית הבטיחות
+      // עוברת לתא סוג הפגם, וחומרה 4–5 מודגשת באדום — כדי שהמידע לא ילך לאיבוד
+      const sevCls = g.s >= 4 ? "summary-sub summary-urgent" : "summary-sub";
+      rows.push(`<tr>
         <td>${where}</td>
+        <td>${summaryDefectLabel(g.def)}<div class="${sevCls}">חומרה ${g.sMin < g.s ? `<span dir="ltr">${g.sMin}–${g.s}</span>` : `${g.s}${SUMMARY_SEVERITY_NAME[g.s] ? " — " + esc(SUMMARY_SEVERITY_NAME[g.s]) : ""}`}</div>${
+          g.isSafety ? `<div class="summary-safety-tag summary-urgent">⚠ בטיחות משתמשי הדרך</div>` : ""}</td>
         <td>${guide ? esc(guide.remedy) : "בהתאם להנחיית מהנדס."}</td>
         <td>${summaryScoreChange("CPIcrit", prev.cpiCrit, g.after.cpiCrit)}${summaryScoreChange("CPIav", prev.cpiAv, g.after.cpiAv)}</td>
       </tr>`);
       prev = g.after;
     }
-    html += `<p class="summary-p summary-keep">הטיפולים הנדרשים מדורגים בטבלה לפי סדר עדיפות: ממצאים הדורשים תשומת לב
-      מיידית, ליקויים המהווים סיכון בטיחותי למשתמשי הדרך, ולאחריהם לפי דרגת החומרה והשפעת הפגם על ציון המבנה.
-      בעמודה האחרונה מוצג הציון הצפוי במצטבר, בהנחה שבוצעו הטיפולים בשורה זו ובכל השורות שמעליה. האומדן נערך
-      בהתאם לסעיף 2.6.6 ב"הנחיות לביצוע סקירת גשרים, מנהרות ומבני דרך": הפגם נחשב משוקם במלואו, ודירוג הרכיב
-      מחושב מחדש על בסיס יתר הפגמים שתועדו בו.</p>
+    html += `<p class="summary-p summary-lines summary-keep">הטיפולים הנדרשים מדורגים בטבלה לפי סדר עדיפות הבא:<br>
+      ליקויים המהווים <strong>סיכון בטיחותי מיידי</strong> למשתמשי הדרך.<br>
+      ולאחריהם לפי דרגת החומרה והשפעת הפגם על ציון המבנה.<br>
+      בעמודה האחרונה מוצג הציון הצפוי במצטבר, בהנחה שבוצעו הטיפולים בשורה זו ובכל השורות שמעליה.</p>
       <table class="gov-table summary-table summary-treat">
-        <thead><tr><th class="st-prio">דרגת עדיפות</th><th class="st-def">סוג הפגם</th><th class="st-where">רכיב ומיקום</th><th>אופן הטיפול המומלץ</th><th class="st-after">ציון צפוי מצטבר לאחר הטיפול</th></tr></thead>
+        <thead><tr><th class="st-where">רכיב ומיקום</th><th class="st-def">סוג הפגם</th><th>אופן הטיפול המומלץ</th><th class="st-after">ציון צפוי מצטבר לאחר הטיפול</th></tr></thead>
         <tbody>${rows.join("")}</tbody>
       </table>`;
     const all = plan.allFix;
@@ -984,7 +983,8 @@ function renderSummary(state, result, summary, plan) {
         </table>`;
     }
     if (plan.otherCount) {
-      html += `<p class="summary-p">בנוסף תועדו ${plan.otherCount} פגמים בעלי השפעה זניחה על ציון המבנה; הטיפול בהם יבוצע במסגרת האחזקה השוטפת.</p>`;
+      html += `<p class="summary-p summary-lines">בנוסף תועדו ${plan.otherCount} פגמים בעלי השפעה זניחה על ציון המבנה;<br>
+        הטיפול בהם יבוצע במסגרת האחזקה השוטפת.</p>`;
     }
   } else {
     html += `<p class="summary-p">לא נדרשים טיפולים לשיפור ציון המבנה.${plan.otherCount ? ` ${plan.otherCount} פגמים קלים שתועדו יטופלו במסגרת האחזקה השוטפת.` : ""}</p>`;

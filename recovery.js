@@ -17,7 +17,7 @@ function serializeForRecovery(state) {
     v: RECOVERY_VERSION,
     st: {
       nm: state.name, no: state.number, cl: state.structureClass,
-      sp: state.superType, tt: state.tunnelType, ic: state.inspClass,
+      sp: state.superType, tt: state.tunnelType, ic: state.inspClass, scl: state.surveyClass,
       id: state.inspDate, pd: state.prevInspDate,
       sn: state.surveyorName, cn: state.companyName, sc: state.spanCount,
       ord: state.client, sty: state.surveyType, dsn: state.designer,
@@ -54,6 +54,7 @@ function deserializeFromRecovery(c) {
   Object.assign(st, {
     name: c.st.nm, number: c.st.no, structureClass: c.st.cl,
     superType: c.st.sp, tunnelType: c.st.tt, inspClass: c.st.ic,
+    surveyClass: c.st.scl != null ? c.st.scl : legacySurveyClass(c.st.ic),
     inspDate: c.st.id, prevInspDate: c.st.pd,
     surveyorName: c.st.sn, companyName: c.st.cn, spanCount: c.st.sc,
     // שדות שנוספו אחרי הגרסה הראשונה — קוד ישן פשוט לא נושא אותם, אז נופלים

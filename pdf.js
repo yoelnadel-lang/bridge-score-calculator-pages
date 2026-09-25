@@ -642,10 +642,10 @@ const PdfExport = (() => {
   const SUM_PAD_X = 28, SUM_PAD_TOP = 22, SUM_GAP = 10, SUM_FOOTER = 44;
   const SUM_CONTENT_W = PORTRAIT_W_PX - SUM_PAD_X * 2;
 
-  // שורת תחתית לעמוד בתקציר המנהלים: קו מפריד, ההסתייגות (SUMMARY_DISCLAIMER)
-  // מימין ו"דף N מתוך M" משמאל, באותו גופן כמו שאר הדוח. נכתבת ישירות על קנבס
-  // העמוד, כך שהיא בתחתית כל עמוד בדיוק, ובגודל קבוע גם כשהתוכן הוקטן
-  function drawSummaryFooter(ctx, pageNo, total) {
+  // שורת תחתית לעמוד בתקציר המנהלים: קו מפריד וההסתייגות (SUMMARY_DISCLAIMER)
+  // בלבד — בלי מספור עמודים, לבקשת המשתמש. נכתבת ישירות על קנבס העמוד, כך
+  // שהיא בתחתית כל עמוד בדיוק, ובגודל קבוע גם כשהתוכן הוקטן
+  function drawSummaryFooter(ctx) {
     const S = SCALE, x0 = SUM_PAD_X * S, x1 = (PORTRAIT_W_PX - SUM_PAD_X) * S, y = (PORTRAIT_H_PX - 20) * S;
     ctx.save();
     ctx.strokeStyle = "#000"; ctx.lineWidth = S;
@@ -654,14 +654,12 @@ const PdfExport = (() => {
     ctx.font = `${11 * S}px Arial, "Segoe UI", "Noto Sans Hebrew", sans-serif`;
     ctx.direction = "rtl"; ctx.textAlign = "right";
     ctx.fillText(SUMMARY_DISCLAIMER, x1, y);
-    ctx.textAlign = "left";
-    ctx.fillText(`דף ${pageNo} מתוך ${total}`, x0, y);
     ctx.restore();
   }
 
   // התקציר בנוי כמכתב: בעמוד 1 נייר מכתבים (לוגו החברה מימין, לוגואי המזמין
-  // ותאריך ההפקה משמאל, קו מתחת), אחריו "לכבוד" (כשהוזן מזמין), שורת "הנדון"
-  // ופרטי המבנה העיקריים — ורק אז המקטעים. בשאר העמודים: כותרת רצה מצומצמת
+  // משמאל, קו מתחת ותאריך ההפקה משמאל מתחת לקו), שורת הנושא ופרטי המבנה העיקריים — ורק אז
+  // המקטעים. בשאר העמודים: כותרת רצה מצומצמת
   function summaryLetterheadHTML() {
     const today = fmtDateDMY(new Date());
     const clientLogos = (state.clientLogos || []).map((url) =>
@@ -672,7 +670,10 @@ const PdfExport = (() => {
     const surveyTxt = survey ? (survey.startsWith("סקירה") ? survey : "סקירה " + survey) : "סקירה";
     const pairs = [
       ["שם המבנה", esc(state.name || "—")], ["מספר המבנה", ltr(state.number || "—")],
-      ["סיווג ראשי", esc(STRUCTURE_CLASSES[state.structureClass].label)], ["מספר מפתחים", String(state.spans.length)],
+      // סיווג ראשי = סיווג המבנה לסקירה בנוסח המחירון ("גשר סוג 1.2", "מובל
+      // סוג 5"), לא שם הקבוצה הכללית (גשר / מעבר תחתי / מובל גדול); "—" כשלא נבחר
+      ["סיווג ראשי", surveyClassEntry(state.surveyClass) ? esc(surveyClassEntry(state.surveyClass).label) : "—"],
+      ["מספר מפתחים", String(state.spans.length)],
       ["סוג הסקירה", esc(state.surveyType || "—")], ["תאריך הסקירה", esc(fmtIsoDate(state.inspDate) || "—")],
       ["שם הסוקר", esc(state.surveyorName || "—")], ["שם החברה", esc(state.companyName || "—")],
     ];
@@ -685,12 +686,11 @@ const PdfExport = (() => {
         <div class="gov-logo-box sl-logo"><img src="logo.jpeg"></div>
         <div class="sl-top-left">
           ${clientLogos ? `<div class="gov-logo-group">${clientLogos}</div>` : ""}
-          <div class="sl-date">תאריך: <span dir="ltr">${today}</span></div>
         </div>
       </div>
       <div class="sl-rule"></div>
-      ${(state.client || "").trim() ? `<div class="sl-to">לכבוד<br><strong>${esc(state.client)}</strong></div>` : ""}
-      <div class="sl-subject">הנדון: <u>תקציר מנהלים — ${esc(state.name || "ללא שם")}</u></div>
+      <div class="sl-date">תאריך: <span dir="ltr">${today}</span></div>
+      <div class="sl-subject"><u>תקציר מנהלים — ${esc(state.name || "ללא שם")}</u></div>
       <div class="sl-subtitle">דוח ${esc(surveyTxt)} · מבנה מספר <span dir="ltr">${esc(state.number || "—")}</span></div>
       <table class="sl-details">${rows}</table>`;
   }
@@ -709,7 +709,7 @@ const PdfExport = (() => {
     return el;
   }
 
-  // --- ייצוא "תקציר מנהלים": מסמך נפרד, לאורך, עד 2 עמודים ---
+  // --- ייצוא "תקציר מנהלים": מסמך נפרד, לאורך, עד 3 עמודים ---
   async function exportSummary() {
     if (!hasAnyComponents()) { alert("אין נתונים לייצוא — הוסף רכיבים תחילה."); return; }
     const input = buildEngineInput();
@@ -739,11 +739,11 @@ const PdfExport = (() => {
       // שורת כותרת של טבלה, ופסקת פתיחה של טבלה (.summary-keep) — כדי שאף
       // אחת מהן לא תישאר לבד בתחתית עמוד, מנותקת ממה שהיא מציגה.
       // טבלה שנחתכה ממשיכה בעמוד הבא עם שורת הכותרת שלה, כמו בדוח הסקירה.
-      // f = מקדם הקטנה: התקציר מוגבל ל-2 עמודים; אם התוכן ארוך יותר, מרחיבים
+      // f = מקדם הקטנה: התקציר מוגבל ל-3 עמודים; אם התוכן ארוך יותר, מרחיבים
       // את המיכל (התוכן זורם לרוחב ומתקצר) ומקטינים את התמונה בחזרה לרוחב
       // העמוד — הקטנה אחידה של התוכן, עד 60% לכל היותר. הכותרת והתחתית לא
       // מוקטנות
-      const MAX_PAGES = 2;
+      const MAX_PAGES = 3;
       const layout = (f) => {
         const top = el.getBoundingClientRect().top;
         const breaks = [...el.querySelectorAll(".summary-block > *, tr")]
@@ -762,6 +762,9 @@ const PdfExport = (() => {
         // ראש כל בלוק — עמוד חדש מתחיל בראש הבלוק הבא ולא ברווח שמעליו
         // (אחרת מרווח העליון של כותרת מקטע נוסף לריווח שמתחת לכותרת העמוד)
         const tops = [...el.querySelectorAll(".summary-block > *")].map((n) => n.getBoundingClientRect().top - top);
+        // מעבר עמוד כפוי לפני מקטע שמסומן .summary-page-break (מקטע שמתחיל
+        // תמיד בראש עמוד חדש)
+        const forced = [...el.querySelectorAll(".summary-page-break")].map((n) => n.getBoundingClientRect().top - top);
         const totalH = breaks.length ? breaks[breaks.length - 1] : el.getBoundingClientRect().height;
         const slices = [];
         for (let start = 0; start < totalH - 1;) {
@@ -775,7 +778,8 @@ const PdfExport = (() => {
           const rep = tbl ? [tbl.top, tbl.head] : null;
           const room = avail - (rep ? rep[1] - rep[0] : 0);
           const fits = breaks.filter((y) => y > start + 1 && y <= start + room);
-          const end = Math.min(totalH, fits.length ? fits[fits.length - 1] : start + room);
+          const fb = forced.find((y) => y > start + 1 && y <= start + room);
+          const end = fb != null ? fb : Math.min(totalH, fits.length ? fits[fits.length - 1] : start + room);
           slices.push({ start, end, rep });
           start = end;
         }
@@ -813,7 +817,7 @@ const PdfExport = (() => {
         const { start, end, rep } = slices[p];
         if (rep) y += strip(ctx, rep[0], rep[1], y);
         strip(ctx, start, end, y);
-        drawSummaryFooter(ctx, p + 1, slices.length);
+        drawSummaryFooter(ctx);
         if (p) pdf.addPage();
         pdf.addImage(page.toDataURL("image/jpeg", JPEG_QUALITY), "JPEG", 0, 0, PORTRAIT_W_MM, PORTRAIT_H_MM);
       }

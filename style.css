@@ -347,44 +347,58 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 /* כותרות המקטעים בתקציר — בלי המילוי האפור של דוח הסקירה: מספור, הדגשה וקו
    תחתון דק, כמו בכותרות של מכתב הנדסי */
 .summary-block .summary-section-title {
-  background: none; padding: 0 0 3px; border-bottom: 1px solid #000; font-size: 1.08em; margin: 18px 0 8px;
+  background: none; padding: 0 0 5px; border-bottom: 1px solid #000; font-size: 1.15em; margin: 30px 0 14px;
 }
 .summary-block .gov-section-title:first-child { margin-top: 0; }
-.summary-p { margin: 0 0 8px; line-height: 1.6; text-align: justify; }
-.summary-block .gov-table { margin: 2px 0 12px; }
+.summary-p { margin: 0 0 14px; line-height: 1.75; text-align: justify; }
+/* פסקה שבנויה משורות נפרדות (<br>) — מיושרת לימין, בלי מתיחת רווחים */
+.summary-p.summary-lines { text-align: right; }
+/* מרווח נוסף לפני מקטע שבא אחרי טבלה (מקטע 3) */
+.summary-block .summary-section-title.summary-section-gap { margin-top: 44px; }
+.summary-block .gov-table { margin: 6px 0 20px; }
+.summary-block .gov-table th, .summary-block .gov-table td { padding: 7px 10px; line-height: 1.5; }
 .summary-block .gov-table th { text-align: center; vertical-align: middle; }
 .summary-block .gov-attention { margin: 6px 0 4px; }
-.summary-block .gauges { margin: 2px 0 6px; }
+.summary-block .score-cards { margin: 26px 0 18px; }
 .summary-num { text-align: center !important; white-space: nowrap; }
-.summary-sub { font-size: .85em; color: #333; margin-top: 2px; }
+.summary-sub { font-size: .85em; color: #333; margin-top: 4px; }
 .summary-sub-inline { font-size: .85em; color: #333; }
 .summary-treat { table-layout: fixed; }
-.summary-treat .st-prio { width: 10%; }
-.summary-treat .st-def { width: 18%; }
-.summary-treat .st-where { width: 21%; }
+.summary-treat .st-where { width: 24%; }
+.summary-treat .st-def { width: 22%; }
 .summary-treat .st-after { width: 21%; }
-.summary-treat td:first-child { font-weight: 700; text-align: center; }
 .summary-treat td:last-child { text-align: center; vertical-align: middle; }
-.summary-prio-urgent td:first-child { color: #b00020; }
+.summary-urgent { color: #b00020; font-weight: 700; }
 .summary-safety-tag { font-size: .8em; font-weight: 700; margin-top: 3px; }
 .summary-chg { font-size: .9em; overflow-wrap: anywhere; }
 .summary-nochange { color: #666; }
 .summary-result td:first-child { font-weight: 700; }
 .summary-disclaimer { margin-top: 14px; }
-.gauge-of { font-size: .9rem; font-weight: 600; color: #57606a; }
 .defect-narrative { margin: 6px 0 0; }
 .defect-narrative p { line-height: 1.6; margin: 0 0 8px; text-align: justify; }
 .defect-note-quote { font-style: italic; color: #444; border-inline-start: 3px solid var(--border); padding-inline-start: 8px; }
 
-/* מדי מהירות — טבלה 15 */
-.gauges { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; }
-.gauge { flex: 1; min-width: 240px; max-width: 340px; text-align: center; }
-.gauge svg { width: 100%; height: auto; display: block; }
-.gauge-title { font-weight: 700; font-size: .95rem; }
-.gauge-sub { font-size: .74rem; color: #57606a; margin-bottom: 4px; }
-.gauge-value { font-size: 2rem; font-weight: 800; line-height: 1.1; margin-top: 2px; }
-.gauge-name { font-weight: 700; font-size: 1rem; }
-.gauge-meaning { font-size: .78rem; color: #333; margin-top: 4px; text-align: center; }
+/* ציוני המבנה — "מדרגות מצב" (טבלה 15): כרטיס לכל ציון, חמש עמודות עולות
+   עם שם הסיווג והטווח מתחת לכל עמודה; העמודות עד דרגת המבנה ממולאות */
+.score-cards { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; }
+.score-steps { flex: 1; min-width: 280px; max-width: 380px; border: 1px solid #000; padding: 18px 20px 16px; color: #000; }
+.ss-title { font-weight: 700; font-size: 1.05em; }
+.ss-figure { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 16px 0 22px; }
+.ss-value { font-size: 2.4em; font-weight: 700; line-height: 1; }
+.ss-of { font-size: .42em; font-weight: 400; color: #444; }
+.ss-name { font-size: 1.15em; font-weight: 700; }
+.ss-level { font-size: .82em; color: #444; }
+.ss-bars { display: flex; justify-content: space-between; gap: 4px; }
+.ss-col { flex: 1; display: flex; flex-direction: column; align-items: center; }
+.ss-track { height: 122px; width: 100%; display: flex; align-items: flex-end; justify-content: center; border-bottom: 1px solid #000; }
+.ss-bar { width: 38px; background: #e2e2e2; }
+.ss-bar.ss-on { background: #6e6e6e; }
+.ss-bar.ss-cur { background: #1f1f1f; }
+.ss-lbl { font-size: .8em; margin-top: 5px; white-space: nowrap; color: #444; }
+.ss-rng { font-size: .72em; color: #666; margin-top: 1px; }
+.ss-col-cur .ss-lbl { font-weight: 700; color: #000; }
+.ss-col-cur .ss-rng { color: #000; }
+.ss-meaning { font-size: .85em; color: #222; margin-top: 16px; padding-top: 10px; border-top: 1px solid #ccc; line-height: 1.6; }
 
 footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
 
@@ -400,18 +414,20 @@ footer { text-align: center; font-size: .78rem; color: #57606a; padding: 18px; }
 }
 /* נייר המכתבים בעמוד 1 של התקציר */
 .summary-pdf-head .sl-top { display: flex; align-items: flex-end; justify-content: space-between; }
-.summary-pdf-head .sl-logo { flex: 0 0 130px; width: 130px; height: 64px; justify-content: flex-start; }
+/* כל הלוגואים (החברה והמזמין) באותה תיבה בדיוק — כך יחסי הגודל ביניהם
+   נשמרים; התמונה מוקטנת לתוך התיבה בלי עיוות (object-fit: contain) */
+.summary-pdf-head .gov-logo-box { flex: 0 0 140px; width: 140px; height: 64px; }
+.summary-pdf-head .sl-logo { justify-content: flex-start; }
 .summary-pdf-head .sl-top-left { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.summary-pdf-head .sl-date { font-size: 1em; }
-.summary-pdf-head .sl-rule { border-top: 1.5px solid #000; margin: 8px 0 26px; }
-.summary-pdf-head .sl-to { margin: 0 0 18px; line-height: 1.5; }
-.summary-pdf-head .sl-subject { font-weight: 700; font-size: 1.25em; text-align: center; margin: 0 0 6px; }
-.summary-pdf-head .sl-subtitle { text-align: center; margin: 0 0 22px; }
-.summary-pdf-head .sl-details { width: 100%; border-collapse: collapse; border-top: 1px solid #000; border-bottom: 1px solid #000; margin: 0 0 14px; }
-.summary-pdf-head .sl-details th { font-weight: 400; color: #444; text-align: right; white-space: nowrap; padding: 4px 6px 4px 8px; width: 1%; }
-.summary-pdf-head .sl-details td { text-align: right; padding: 4px 16px 4px 6px; }
-.summary-pdf-head .sl-details tr:first-child th, .summary-pdf-head .sl-details tr:first-child td { padding-top: 8px; }
-.summary-pdf-head .sl-details tr:last-child th, .summary-pdf-head .sl-details tr:last-child td { padding-bottom: 8px; }
+.summary-pdf-head .sl-date { font-size: 1em; text-align: left; margin: 0 0 26px; }
+.summary-pdf-head .sl-rule { border-top: 1.5px solid #000; margin: 10px 0 8px; }
+.summary-pdf-head .sl-subject { font-weight: 700; font-size: 1.35em; text-align: center; margin: 0 0 10px; }
+.summary-pdf-head .sl-subtitle { text-align: center; margin: 0 0 30px; }
+.summary-pdf-head .sl-details { width: 100%; border-collapse: collapse; border-top: 1px solid #000; border-bottom: 1px solid #000; margin: 0 0 22px; }
+.summary-pdf-head .sl-details th { font-weight: 400; color: #444; text-align: right; white-space: nowrap; padding: 6px 6px 6px 8px; width: 1%; }
+.summary-pdf-head .sl-details td { text-align: right; padding: 6px 16px 6px 6px; }
+.summary-pdf-head .sl-details tr:first-child th, .summary-pdf-head .sl-details tr:first-child td { padding-top: 10px; }
+.summary-pdf-head .sl-details tr:last-child th, .summary-pdf-head .sl-details tr:last-child td { padding-bottom: 10px; }
 /* כותרת רצה בעמודים 2 ואילך */
 .summary-pdf-head .sl-running { display: flex; justify-content: space-between; border-bottom: 1px solid #000; padding: 0 0 4px; font-size: .92em; }
 

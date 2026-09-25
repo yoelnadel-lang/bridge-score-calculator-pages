@@ -352,7 +352,7 @@ function isPristineFindingsList(list) {
 function defaultState() {
   return {
     name: "", number: "", structureClass: "BRG", superType: 4, tunnelType: null,
-    inspClass: "", inspDate: todayISO(), prevInspDate: "",
+    inspClass: "", surveyClass: "", inspDate: todayISO(), prevInspDate: "",
     surveyorName: "", companyName: "",
     client: "", surveyType: "שגרתית", designer: "", coordX: "", coordY: "", roadNumber: "",
     clientLogos: [],
@@ -369,6 +369,8 @@ function migrateState(s) {
   const out = { ...defaultState(), ...s };
   if (!out.inspDate) out.inspDate = todayISO();
   if (out.inspClass == null) out.inspClass = "";
+  // סיווג לסקירה מפורט (סעיף 13.1) — נגזר מקבוצת התדירות בקבצים ישנים
+  if (out.surveyClass == null) out.surveyClass = legacySurveyClass(out.inspClass);
   // ניגשים אליו כאובייקט בכמה מקומות — הגנה מפני מצב שמור שנשמר לפני שהשדה נוסף
   if (!out.immediateAttention || typeof out.immediateAttention !== "object") {
     out.immediateAttention = { text: "", photo: "" };
@@ -704,7 +706,7 @@ function update() {
     placeholder: "אופציונלי — הקלד לסינון…",
   });
   document.getElementById("st-spancount").value = state.spanCount;
-  document.getElementById("insp-class").value = state.inspClass;
+  document.getElementById("insp-class").value = state.surveyClass || "";
   document.getElementById("insp-date").value = state.inspDate;
   document.getElementById("prev-insp-date").value = state.prevInspDate;
   // שדות סטטיים (לא נבנים מחדש) — כך הסמן לא קופץ באמצע הקלדה בטקסט חופשי
@@ -840,7 +842,7 @@ function init() {
     .map(([k, v]) => `<option value="${k}">${k} — ${esc(v.label)}</option>`).join("");
   document.getElementById("insp-class").innerHTML =
     '<option value="">— בחר סיווג —</option>' +
-    INSPECTION_FREQUENCIES.map((f, i) => `<option value="${i}">${esc(f.label)} — כל ${f.years} שנים</option>`).join("");
+    SURVEY_CLASSES.map((c) => `<option value="${c.code}">${esc(c.label)} — כל ${INSPECTION_FREQUENCIES[c.freq].years} שנים</option>`).join("");
 
   const saved = localStorage.getItem(STORAGE_KEY);
   // uidCounter חייב להמשיך אחרי ה-uid הגבוה ביותר שכבר קיים בנתונים השמורים.
@@ -923,7 +925,14 @@ function init() {
     state.spanCount = n;
     scheduleUpdate();
   });
-  document.getElementById("insp-class").addEventListener("change", (e) => { state.inspClass = e.target.value; scheduleUpdate(); });
+  // הסיווג המפורט נשמר ב-surveyClass; inspClass (קבוצת התדירות) נגזר ממנו —
+  // כל חישובי מועד הסקירה הבאה ממשיכים לקרוא את inspClass
+  document.getElementById("insp-class").addEventListener("change", (e) => {
+    const entry = surveyClassEntry(e.target.value);
+    state.surveyClass = entry ? entry.code : "";
+    state.inspClass = entry ? String(entry.freq) : "";
+    scheduleUpdate();
+  });
   document.getElementById("insp-date").addEventListener("change", (e) => { state.inspDate = e.target.value; scheduleUpdate(); });
 
   // אצילת אירועים לכל הפעולות הדינמיות

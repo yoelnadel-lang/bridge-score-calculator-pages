@@ -309,6 +309,45 @@ const INSPECTION_FREQUENCIES = [
 ];
 const DEFAULT_NEXT_INSPECTION_MONTHS = 24; // ברירת המחדל בטופס (סעיף 2.6.1)
 
+// --- סיווג המבנה לסקירה — הרשימה הרשמית (37 סיווגים), "מדריך לתיעוד גשרים,
+// מנהרות ומבני דרך" (מהדורה 5-2019), סעיף 13.1, בנוסח של "מחירון סקירת
+// גשרים ומבני דרך" (מכרז 64/23, טבלה 1): "גשר סוג 1.0", "גשר סוג 1.2",
+// "מובל סוג 5". זה הסיווג שמוצג בתקציר המנהלים; freq = האינדקס בטבלת
+// התדירויות שלעיל (סעיף 3.4 בהנחיות לביצוע סקירה), שבה חלק מהסוגים
+// מקובצים (למשל גשר סוג 1.0–1.3) ---
+const SURVEY_CLASSES = [
+  ...[1, 2, 3, 4, 5, 6].map((n) => ({ code: `13.1-${n}`, label: `גשר מקטעים סוג ${n}`, freq: 0 })),
+  { code: "13.1-7", label: "גשר סוג 1.0", freq: 1 },
+  { code: "13.1-8", label: "גשר סוג 1.1", freq: 1 },
+  { code: "13.1-9", label: "גשר סוג 1.2", freq: 1 },
+  { code: "13.1-10", label: "גשר סוג 1.3", freq: 1 },
+  { code: "13.1-11", label: "גשר סוג 2", freq: 2 },
+  { code: "13.1-12", label: "גשר סוג 3", freq: 3 },
+  { code: "13.1-13", label: "גשר סוג 4", freq: 4 },
+  { code: "13.1-14", label: "גשר סוג 4.1", freq: 4 },
+  { code: "13.1-15", label: "גשר סוג 4.2", freq: 4 },
+  { code: "13.1-16", label: "גשר סוג 5", freq: 5 },
+  { code: "13.1-17", label: "גשר סוג 6", freq: 6 },
+  ...[1, 2, 3, 4].map((n) => ({ code: `13.1-${17 + n}`, label: `מנהרה סוג ${n}`, freq: 7 })),
+  ...[1, 2, 3, 4, 5].map((n) => ({ code: `13.1-${21 + n}`, label: `מובל סוג ${n}`, freq: 7 + n })),
+  ...[1, 2, 3].map((n) => ({ code: `13.1-${26 + n}`, label: `גשר שילוט סוג ${n}`, freq: 13 })),
+  ...[1, 2, 3, 4, 5, 6].map((n) => ({ code: `13.1-${29 + n}`, label: `קיר תומך סוג ${n}`, freq: 13 + n })),
+  ...[1, 2].map((n) => ({ code: `13.1-${35 + n}`, label: `קיר אקוסטי סוג ${n}`, freq: 20 })),
+];
+function surveyClassEntry(code) {
+  return SURVEY_CLASSES.find((c) => c.code === code) || null;
+}
+// מצב שנשמר לפני שנוסף הסיווג המפורט מחזיק רק את קבוצת התדירות (inspClass).
+// כשלקבוצה מתאים סיווג אחד בלבד (למשל מובל סוג 5) — משלימים אותו; בקבוצות
+// מרובות-סוגים (גשר סוג 1.0–1.3, 4/4.1/4.2, מקטעים, מנהרות, שילוט) לא מנחשים,
+// והשדה נשאר ריק לבחירה מחדש (התדירות עצמה ממשיכה לעבוד)
+function legacySurveyClass(inspClass) {
+  if (inspClass === "" || inspClass == null) return "";
+  const freq = +inspClass;
+  const matches = SURVEY_CLASSES.filter((c) => c.freq === freq);
+  return matches.length === 1 ? matches[0].code : "";
+}
+
 // ============================================================================
 // תעודת זהות לגשר ומובל — מהדורה 6-2008 (Bridge ID Cards)
 // כל שדה: { code, label, type } — code הוא מספר הסעיף כפי שמופיע בעמודת
@@ -466,6 +505,7 @@ if (typeof module !== "undefined") {
     SUPERSTRUCTURE_TYPES, TUNNEL_TYPES, COMPONENT_CATALOGS,
     COMPONENTS_BRG, COMPONENTS_SGR, COMPONENTS_WAL, COMPONENTS_TUN,
     MEANING_AV, MEANING_CRIT, INSPECTION_FREQUENCIES, DEFAULT_NEXT_INSPECTION_MONTHS,
+    SURVEY_CLASSES, surveyClassEntry, legacySurveyClass,
     ID_CARD_GROUPS, REQUIRED_FINDINGS_BY_CLASS,
   };
 }
