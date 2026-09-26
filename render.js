@@ -784,6 +784,27 @@ function summaryDefectLabel(code) {
   const cat = DEFECT_CATALOG.defects.find((x) => x.code === code);
   return code ? `<bdi>${esc(code)}</bdi>${cat ? " " + esc(cat.name_he) : ""}` : "—";
 }
+// תמצות הערת הסוקר לטבלת הרכיבים הקובעים: הערות הסוקר ארוכות ("נצפתה פגיעה
+// מכאנית לאורך קורת הבטון מלווה בשברי...") — בתקציר נשאר רק מהות הממצא.
+// מסירים פתיח תצפית ("נצפו/נצפתה..."), חותכים בסוף המשפט או במילת מיקום/
+// תיאור משני (המיקום כבר מופיע בעמודת "מיקום"), ושומרים מידה אם צוינה.
+// מחזיר "" כשהתמצית לא מוסיפה על שם הפגם בקטלוג (כל מילותיה כבר בו)
+const SUMMARY_NOTE_CUT = /[,.;:]|\s[-–]\s|\s(?:לאורך|לכל אורך|על גבי|ע"ג|ע״ג|בסמוך|מלווה|מלווים|מלוות|המקשה|המקשים|בתחום|בצידו|בצד|ללא|אשר|כתוצאה)\s/g;
+function summaryNoteBrief(note, catalogName) {
+  let t = String(note || "").replace(/\s+/g, " ").trim();
+  if (!t || t === "רכיב תקין") return "";
+  const measure = t.match(/\d+(?:\.\d+)?\s*(?:מ"מ|מ״מ|ס"מ|ס״מ|מ'|מטר|%)/);
+  t = t.replace(/^(?:נצפו|נצפתה|נצפה|נצפים|נמצאו|נמצאה|נמצא|זוהו|זוהתה|זוהה|קיימים|קיימת|קיים|ישנם|ישנה)\s+/, "");
+  for (const m of t.matchAll(SUMMARY_NOTE_CUT)) {
+    if (m.index >= 4) { t = t.slice(0, m.index); break; }
+  }
+  t = t.replace(/[\s,.;:–-]+$/, "");
+  if (t.length > 60) t = t.slice(0, t.lastIndexOf(" ", 58)) + "…";
+  if (measure && !t.includes(measure[0])) t += ` (${measure[0]})`;
+  const words = t.split(" ").filter((w) => w.length > 2);
+  if (catalogName && words.every((w) => catalogName.includes(w))) return "";
+  return t;
+}
 function summarySpansText(spanIds, singleUnit, totalSpans) {
   if (singleUnit) return "המבנה כולו";
   const ids = [...new Set(spanIds)].sort((a, b) => a - b);
@@ -831,11 +852,12 @@ function renderSummary(state, result, summary, plan) {
   let html = '<div class="summary-block">';
 
   // [1] ציוני המבנה ומשמעותם — פסקת פתיחה (זיהוי המבנה + הסבר שני הציונים
-  // והציון שהתקבל בכל אחד), ומתחתיה מדי המהירות עם משמעות כל ציון
+  // והציון שהתקבל בכל אחד), ומתחתיה מדי המהירות עם משמעות כל ציון.
+  // פסקה אחת עם <br> בין השורות — כך המרווח האנכי בין כל השורות אחיד
   html += `${sectionTitle(1, "ציוני מצב המבנה ומשמעותם")}
-    <p class="summary-p">בהתאם למתודולוגיית נתיבי ישראל, מצב המבנה מוערך באמצעות שני מדדי
-      <bdi>CPI (Condition Performance Indicator)</bdi> בסולם 0–100.</p>
-    <p class="summary-p summary-lines"><strong>ציון ממוצע</strong> (<bdi>CPIav</bdi>) — ממוצע משוקלל של ציוני המצב של כל
+    <p class="summary-p summary-lines">בהתאם למתודולוגיית נתיבי ישראל, מצב המבנה מוערך באמצעות שני מדדי
+      <bdi>CPI (Condition Performance Indicator)</bdi> בסולם 0–100.<br>
+      <strong>ציון ממוצע</strong> (<bdi>CPIav</bdi>) — ממוצע משוקלל של ציוני המצב של כל
       הרכיבים שנסקרו, לפי דרגת חשיבותם.<br>
       <strong>ציון קריטי</strong> (<bdi>CPIcrit</bdi>) — הנקבע לפי ציון המצב הגרוע ביותר מבין הרכיבים בדרגת חשיבות "גבוהה מאוד".<br>
       ציוני המבנה בסקירה הנוכחית:<br>
@@ -888,22 +910,26 @@ function renderSummary(state, result, summary, plan) {
       g.spans.push(c.spanId);
       for (const d of c.defects || []) {
         if (d.s !== c.sMax) continue;
+        // הערת הסוקר מתומצתת ומשויכת לפגם שלה (ר' summaryNoteBrief)
+        const cat = d.def ? DEFECT_CATALOG.defects.find((x) => x.code === d.def) : null;
+        const brief = summaryNoteBrief(d.note, cat ? cat.name_he : "");
         if (d.def) {
-          if (!g.defs.has(d.def)) g.defs.set(d.def, new Set());
-          g.defs.get(d.def).add(c.spanId);
-        }
-        if ((d.note || "").trim()) g.notes.add(d.note.trim());
+          if (!g.defs.has(d.def)) g.defs.set(d.def, { spans: new Set(), notes: new Set() });
+          g.defs.get(d.def).spans.add(c.spanId);
+          if (brief) g.defs.get(d.def).notes.add(brief);
+        } else if (brief) g.notes.add(brief);
       }
     }
     const rows = [...groups.values()].map((g) => {
       const allSpans = new Set(g.spans);
-      const defs = [...g.defs.entries()].sort((a, c) => c[1].size - a[1].size).map(([code, sp]) =>
-        summaryDefectLabel(code) + (!single && sp.size < allSpans.size ? ` <span class="summary-sub-inline">(${esc(spansTxt([...sp]))})</span>` : ""));
+      const defs = [...g.defs.entries()].sort((a, c) => c[1].spans.size - a[1].spans.size).map(([code, { spans: sp, notes }]) =>
+        `<div class="summary-def">${summaryDefectLabel(code)}${!single && sp.size < allSpans.size ? ` <span class="summary-sub-inline">(${esc(spansTxt([...sp]))})</span>` : ""}${
+        notes.size ? `<div class="summary-sub">${[...notes].map(esc).join("; ")}</div>` : ""}</div>`);
       return `<tr>
         <td>${summaryCompLabel(g.comp, catalogIds)}</td>
         <td>${esc(spansTxt(g.spans))}</td>
-        <td>${defs.length ? defs.join("<br>") : "—"}${
-          g.notes.size ? `<div class="summary-sub">הערת הסוקר: ${[...g.notes].map((n) => `"${esc(n)}"`).join("; ")}</div>` : ""}</td>
+        <td>${defs.length ? defs.join("") : "—"}${
+          g.notes.size ? `<div class="summary-sub">${[...g.notes].map(esc).join("; ")}</div>` : ""}</td>
         <td class="summary-num">${g.sMax}</td>
       </tr>`;
     }).join("");
@@ -960,7 +986,7 @@ function renderSummary(state, result, summary, plan) {
     }
     html += `<p class="summary-p summary-lines summary-keep">הטיפולים הנדרשים מדורגים בטבלה לפי סדר עדיפות הבא:<br>
       ליקויים המהווים <strong>סיכון בטיחותי מיידי</strong> למשתמשי הדרך.<br>
-      ולאחריהם לפי דרגת החומרה והשפעת הפגם על ציון המבנה.<br>
+      ליקויים לפי דרגת החומרה והשפעת הפגם על ציון המבנה.<br>
       בעמודה האחרונה מוצג הציון הצפוי במצטבר, בהנחה שבוצעו הטיפולים בשורה זו ובכל השורות שמעליה.</p>
       <table class="gov-table summary-table summary-treat">
         <thead><tr><th class="st-where">רכיב ומיקום</th><th class="st-def">סוג הפגם</th><th>אופן הטיפול המומלץ</th><th class="st-after">ציון צפוי מצטבר לאחר הטיפול</th></tr></thead>

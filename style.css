@@ -363,6 +363,8 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 .summary-num { text-align: center !important; white-space: nowrap; }
 .summary-sub { font-size: .85em; color: #333; margin-top: 4px; }
 .summary-sub-inline { font-size: .85em; color: #333; }
+.summary-def + .summary-def { margin-top: 6px; }
+.summary-def .summary-sub { margin-top: 1px; }
 .summary-treat { table-layout: fixed; }
 .summary-treat .st-where { width: 24%; }
 .summary-treat .st-def { width: 22%; }
