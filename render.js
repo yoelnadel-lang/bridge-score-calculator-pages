@@ -784,26 +784,81 @@ function summaryDefectLabel(code) {
   const cat = DEFECT_CATALOG.defects.find((x) => x.code === code);
   return code ? `<bdi>${esc(code)}</bdi>${cat ? " " + esc(cat.name_he) : ""}` : "—";
 }
-// תמצות הערת הסוקר לטבלת הרכיבים הקובעים: הערות הסוקר ארוכות ("נצפתה פגיעה
-// מכאנית לאורך קורת הבטון מלווה בשברי...") — בתקציר נשאר רק מהות הממצא.
-// מסירים פתיח תצפית ("נצפו/נצפתה..."), חותכים בסוף המשפט או במילת מיקום/
-// תיאור משני (המיקום כבר מופיע בעמודת "מיקום"), ושומרים מידה אם צוינה.
-// מחזיר "" כשהתמצית לא מוסיפה על שם הפגם בקטלוג (כל מילותיה כבר בו)
-const SUMMARY_NOTE_CUT = /[,.;:]|\s[-–]\s|\s(?:לאורך|לכל אורך|על גבי|ע"ג|ע״ג|בסמוך|מלווה|מלווים|מלוות|המקשה|המקשים|בתחום|בצידו|בצד|ללא|אשר|כתוצאה)\s/g;
-function summaryNoteBrief(note, catalogName) {
-  let t = String(note || "").replace(/\s+/g, " ").trim();
-  if (!t || t === "רכיב תקין") return "";
-  const measure = t.match(/\d+(?:\.\d+)?\s*(?:מ"מ|מ״מ|ס"מ|ס״מ|מ'|מטר|%)/);
-  t = t.replace(/^(?:נצפו|נצפתה|נצפה|נצפים|נמצאו|נמצאה|נמצא|זוהו|זוהתה|זוהה|קיימים|קיימת|קיים|ישנם|ישנה)\s+/, "");
-  for (const m of t.matchAll(SUMMARY_NOTE_CUT)) {
-    if (m.index >= 4) { t = t.slice(0, m.index); break; }
+// תיאור דרגת החומרה מפנקס הפגמים, לטבלת הרכיבים הקובעים: הניסוח הרשמי של
+// הדרגה שנקבעה (ולא הערת הסוקר) — אחיד בין דוחות ומסביר את עמודת S.
+// נלקח המשפט הראשון של תיאור הדרגה. הטקסט בקטלוג חולץ מ-PDF ולכן יש בו
+// שיבושים חוזרים (מספרים "0 3." במקום 0.3, סוגריים ונקודות מתחלפים, שורות
+// באנגלית) — מתוקנים כאן באופן כללי; ערכים ששובשו מעבר לזה (שורה שגלשה
+// מדרגה סמוכה, טקסט שנחתך) מנוסחים ידנית ב-SUMMARY_SEVERITY_FIX, בנאמנות
+// למקור ("קוד:דרגה")
+const SUMMARY_SEVERITY_FIX = {
+  "01.11:2": "אטמים ופרופילי גומי או ניאופרן (EPDM) סדוקים או קרועים.",
+  "01.11:3": "מחבר הלוחות למבנה העיקרי של הקיר אינו מתפקד, וקיימת תזוזה או יציאה של הלוח ממקומו.",
+  "02.08:3": "מוטות הברזל חלודים, עד 25% משטח החתך של הזיון הרך.",
+  "02.08:4": "ברזל הזיון הרך איבד כ-25%–50% משטחו.",
+  "02.14:3": "צבע הבטון לאחר התקררות מלאה ורוד.",
+  "02.15:3": "האלמנט מכוסה בשכבה עבה של חומר אורגני החודרת לשכבת כיסוי הבטון.",
+  "02.16:2": "קשקשת (קילוף) בינונית, איבוד הקשרן בעומק 6–13 מ\"מ.",
+  "02.16:3": "קשקשת (קילוף) קשה עד חמורה, איבוד הקשרן בעומק מעל 13 מ\"מ.",
+  "02.18:3": "גומות קילוף קטנות מקומיות אך ברורות, חשיפה חלקית של שכבת הזיון החיצונית.",
+  "03.01:3": "קדח גדול, קדח קרוב לקצה החיפוי.",
+  "03.03:3": "סימני נזילה משמעותיים והיווצרות נזק בחיפוי או במערך העיגון.",
+  "03.07:2": "פגיעה שטחית בחיפוי (שריטות קלות, קילוף מקומי וכד').",
+  "03.20:2": "סדקי טמפרטורה עד 1 מ\"מ, ללא פגיעה בתפקוד התשתית.",
+  "03.21:3": "קילוף שכבת טיח בהיקף רחב, קילופים רבים מחוברים ועמוקים.",
+  "03.25:2": "עיוות קל של לוחות החיפוי.",
+  "04.03:5": "התפוררות.",
+  "04.04:2": "סדקים אורכיים ברוחב של פחות מ-3 מ\"מ וסדקים רוחביים, ללא סדקים אלכסוניים.",
+  "04.05:2": "סדקים בינוניים ברוחב 1–10 מ\"מ או סדיקה רשתית, גומות קילוף רדודות ובודדות.",
+  "04.05:3": "סדקים בינוניים ורחבים (10–20 מ\"מ), גומות קילוף מקומיות ועמוקות.",
+  "04.05:4": "סדקים רחבים (20–25 מ\"מ), גומות קילוף נרחבות ומחוברות.",
+  "08.04:5": "כשל תפקודי של שכבת הציפוי כתוצאה מהמתואר בדרגת חומרה 4.",
+  "09.01:3": "תפקוד חלקי (25%–50% מחתך הניקוז חסום).",
+  "10.12:4": "משטח חלקלק.",
+  "10.19:5": "תחילת היווצרות בורות.",
+  "11.16:4": "פרופילים רופפים או משוחררים מהבטון, בטון העיגון מפורר או חסר.",
+  "11.16:5": "פרופילים התנתקו או חסרים, התפר כשל.",
+  "11.22:3": "אובדן אגרגט וקשרן (חדירה של 20–50 מ\"מ מפני השטח).",
+  "11.22:4": "אובדן חומר מהתפר (חורים בעומק העולה על 50 מ\"מ).",
+  "12.02:5": "כשל תפקודי של שכבת הציפוי כתוצאה מהמתואר בדרגת חומרה 4.",
+  "13.10:3": "בליה מתקדמת של פני האלסטומר.",
+  "13.11:5": "הסמך אינו מתפקד כתוצאה מהמצב המתואר בדרגת חומרה 4.",
+  "13.13:5": "הסמך אינו מתפקד כתוצאה מהמצב המתואר בדרגת חומרה 4.",
+  "13.15:3": "עיבור גזירה אופקי בשיעור 0.5–0.7.",
+  "13.15:4": "עיבור גזירה אופקי בשיעור העולה על 0.7.",
+  "14.01:2": "פגיעות שטחיות ושינויים קלים ברכיבים (כגון שריטות וקילוף מקומי).",
+  "14.01:3": "פגיעה בינונית ברכיבים, דפורמציות ברכיבי בטון, קורות זזו קלות על הסמך.",
+  "15.01:4": "נזילה גדולה (ללא התנגדות) הגורמת לנזק מבני או בטיחותי.",
+  "16.02:2": "אובדן חתך מזערי (פחות מ-5% מעובי החתך).",
+};
+function summarySeverityText(code, s) {
+  if (!code || !(s >= 2)) return "";
+  if (SUMMARY_SEVERITY_FIX[code + ":" + s]) return SUMMARY_SEVERITY_FIX[code + ":" + s];
+  const cat = DEFECT_CATALOG.defects.find((x) => x.code === code);
+  const lines = cat && cat.severities ? cat.severities[s] : null;
+  if (!lines || !lines.length) return "";
+  let t = lines.filter((l) => /[֐-׿]/.test(l)).join(" ").replace(/\s+/g, " ").trim()
+    .replace(/(\d) (\d)\./g, "$1.$2")        // "0 3." → 0.3
+    .replace(/\.\)/g, ").")                  // ".)" → ")."
+    .replace(/ - (?=\d)/g, " ")              // "מ - 5" → "מ 5"
+    .replace(/(\d) ?[–-] ?(\d)/g, "$1–$2")   // טווחים
+    .replace(/מ '' מ/g, "מ\"מ");
+  t = t.split(/(?<=\.)\s/)[0];
+  // משפט ארוך מדי לתא — עד הפסיק האחרון שלפני 110 תווים
+  if (t.length > 120) {
+    const cut = t.lastIndexOf(",", 110);
+    if (cut > 40) t = t.slice(0, cut);
   }
-  t = t.replace(/[\s,.;:–-]+$/, "");
-  if (t.length > 60) t = t.slice(0, t.lastIndexOf(" ", 58)) + "…";
-  if (measure && !t.includes(measure[0])) t += ` (${measure[0]})`;
-  const words = t.split(" ").filter((w) => w.length > 2);
-  if (catalogName && words.every((w) => catalogName.includes(w))) return "";
-  return t;
+  t = t.replace(/[\s,;:]+$/, "");
+  return /[.!?)]$/.test(t) ? (t.endsWith(")") ? t + "." : t) : t + ".";
+}
+// לוכסן בטקסט התקציר תמיד עם רווח לפניו ואחריו ("תיקון / חיזוק", "קורות /
+// מסבכים"), בלי לגעת בתגיות HTML (</td>, src=...) ובלי לפרק תאריכים או
+// שברים — לוכסן בין שתי ספרות ("27/09/2026") נשאר כמו שהוא
+function summarySlashSpace(html) {
+  return String(html).split(/(<[^>]*>)/).map((part, i) => i % 2 ? part
+    : part.replace(/\s*\/\s*/g, (m, off, str) =>
+      /\d/.test(str[off - 1] || "") && /\d/.test(str[off + m.length] || "") ? m : " / ")).join("");
 }
 function summarySpansText(spanIds, singleUnit, totalSpans) {
   if (singleUnit) return "המבנה כולו";
@@ -905,31 +960,30 @@ function renderSummary(state, result, summary, plan) {
     // את המפתחים שבהם הוא נמצא, כשאלה לא כל המפתחים של הרכיב באותה שורה
     const groups = new Map();
     for (const c of ties) {
-      if (!groups.has(c.name)) groups.set(c.name, { comp: c, spans: [], defs: new Map(), notes: new Set(), sMax: c.sMax });
+      if (!groups.has(c.name)) groups.set(c.name, { comp: c, spans: [], defs: new Map(), sMax: c.sMax });
       const g = groups.get(c.name);
       g.spans.push(c.spanId);
       for (const d of c.defects || []) {
         if (d.s !== c.sMax) continue;
-        // הערת הסוקר מתומצתת ומשויכת לפגם שלה (ר' summaryNoteBrief)
-        const cat = d.def ? DEFECT_CATALOG.defects.find((x) => x.code === d.def) : null;
-        const brief = summaryNoteBrief(d.note, cat ? cat.name_he : "");
         if (d.def) {
-          if (!g.defs.has(d.def)) g.defs.set(d.def, { spans: new Set(), notes: new Set() });
-          g.defs.get(d.def).spans.add(c.spanId);
-          if (brief) g.defs.get(d.def).notes.add(brief);
-        } else if (brief) g.notes.add(brief);
+          if (!g.defs.has(d.def)) g.defs.set(d.def, new Set());
+          g.defs.get(d.def).add(c.spanId);
+        }
       }
     }
     const rows = [...groups.values()].map((g) => {
       const allSpans = new Set(g.spans);
-      const defs = [...g.defs.entries()].sort((a, c) => c[1].spans.size - a[1].spans.size).map(([code, { spans: sp, notes }]) =>
-        `<div class="summary-def">${summaryDefectLabel(code)}${!single && sp.size < allSpans.size ? ` <span class="summary-sub-inline">(${esc(spansTxt([...sp]))})</span>` : ""}${
-        notes.size ? `<div class="summary-sub">${[...notes].map(esc).join("; ")}</div>` : ""}</div>`);
+      // מתחת לכל פגם: תיאור הדרגה שנקבעה (S) מפנקס הפגמים — ר' summarySeverityText
+      const defs = [...g.defs.entries()].sort((a, c) => c[1].size - a[1].size).map(([code, sp]) => {
+        const sev = summarySeverityText(code, g.sMax);
+        return `<div class="summary-def">${summaryDefectLabel(code)}${!single && sp.size < allSpans.size ? ` <span class="summary-sub-inline">(${esc(spansTxt([...sp]))})</span>` : ""}${
+          // טווח מספרי ("0.05–0.1") בכיוון LTR — אחרת בשורה עברית הוא מתהפך ל-"0.1–0.05"
+          sev ? `<div class="summary-sub">${esc(sev).replace(/\d+(?:\.\d+)?%?–\d+(?:\.\d+)?%?/g, (r) => `<span dir="ltr">${r}</span>`)}</div>` : ""}</div>`;
+      });
       return `<tr>
         <td>${summaryCompLabel(g.comp, catalogIds)}</td>
         <td>${esc(spansTxt(g.spans))}</td>
-        <td>${defs.length ? defs.join("") : "—"}${
-          g.notes.size ? `<div class="summary-sub">${[...g.notes].map(esc).join("; ")}</div>` : ""}</td>
+        <td>${defs.length ? defs.join("") : "—"}</td>
         <td class="summary-num">${g.sMax}</td>
       </tr>`;
     }).join("");
@@ -980,7 +1034,7 @@ function renderSummary(state, result, summary, plan) {
         <td>${summaryDefectLabel(g.def)}<div class="${sevCls}">חומרה ${g.sMin < g.s ? `<span dir="ltr">${g.sMin}–${g.s}</span>` : `${g.s}${SUMMARY_SEVERITY_NAME[g.s] ? " — " + esc(SUMMARY_SEVERITY_NAME[g.s]) : ""}`}</div>${
           g.isSafety ? `<div class="summary-safety-tag summary-urgent">⚠ בטיחות משתמשי הדרך</div>` : ""}</td>
         <td>${guide ? esc(guide.remedy) : "בהתאם להנחיית מהנדס."}</td>
-        <td>${summaryScoreChange("CPIcrit", prev.cpiCrit, g.after.cpiCrit)}${summaryScoreChange("CPIav", prev.cpiAv, g.after.cpiAv)}</td>
+        <td class="summary-score">${summaryScoreChange("CPIcrit", prev.cpiCrit, g.after.cpiCrit)}${summaryScoreChange("CPIav", prev.cpiAv, g.after.cpiAv)}</td>
       </tr>`);
       prev = g.after;
     }
@@ -989,7 +1043,7 @@ function renderSummary(state, result, summary, plan) {
       ליקויים לפי דרגת החומרה והשפעת הפגם על ציון המבנה.<br>
       בעמודה האחרונה מוצג הציון הצפוי במצטבר, בהנחה שבוצעו הטיפולים בשורה זו ובכל השורות שמעליה.</p>
       <table class="gov-table summary-table summary-treat">
-        <thead><tr><th class="st-where">רכיב ומיקום</th><th class="st-def">סוג הפגם</th><th>אופן הטיפול המומלץ</th><th class="st-after">ציון צפוי מצטבר לאחר הטיפול</th></tr></thead>
+        <thead><tr><th class="st-where">רכיב ומיקום</th><th class="st-def">סוג הפגם</th><th>אופן הטיפול המומלץ</th><th class="st-after summary-score">ציון צפוי מצטבר לאחר הטיפול</th></tr></thead>
         <tbody>${rows.join("")}</tbody>
       </table>`;
     const all = plan.allFix;
@@ -1019,7 +1073,7 @@ function renderSummary(state, result, summary, plan) {
   // בייצוא ה-PDF הפסקה הזו מוסרת מהזרימה ומודפסת כשורת תחתית בכל עמוד
   html += `<p class="hint summary-disclaimer">${esc(SUMMARY_DISCLAIMER)}</p>`;
   html += "</div>";
-  return html;
+  return summarySlashSpace(html);
 }
 
 // ============================================================================

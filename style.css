@@ -360,7 +360,9 @@ input[readonly] { background: var(--panel-header-bg); color: #57606a; }
 .summary-block .gov-table th { text-align: center; vertical-align: middle; }
 .summary-block .gov-attention { margin: 6px 0 4px; }
 .summary-block .score-cards { margin: 26px 0 18px; }
-.summary-num { text-align: center !important; white-space: nowrap; }
+/* עמודות מספריות (חומרה, ציונים) — ממורכזות לרוחב ולגובה התא */
+.summary-num { text-align: center !important; vertical-align: middle !important; white-space: nowrap; }
+.summary-score { text-align: center !important; vertical-align: middle !important; }
 .summary-sub { font-size: .85em; color: #333; margin-top: 4px; }
 .summary-sub-inline { font-size: .85em; color: #333; }
 .summary-def + .summary-def { margin-top: 6px; }

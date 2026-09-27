@@ -638,8 +638,10 @@ const PdfExport = (() => {
 
   // --- תקציר מנהלים: פריסת העמוד (בפיקסלים של עמוד A4 לאורך) ---
   // SUM_PAD_X = שוליים לצדדים, SUM_PAD_TOP = מעל כותרת העמוד, SUM_GAP = בין
-  // הכותרת לתוכן, SUM_FOOTER = שורת התחתית (קו + הסתייגות) בתחתית כל עמוד
-  const SUM_PAD_X = 28, SUM_PAD_TOP = 22, SUM_GAP = 10, SUM_FOOTER = 44;
+  // הכותרת לתוכן (בעמוד 1 אחרי טבלת הפרטים, ובשאר העמודים אחרי הקו של הכותרת
+  // הרצה — שם נדרש מרווח גדול יותר, כדי שכותרת המקטע לא תידבק לקו),
+  // SUM_FOOTER = שורת התחתית (קו + הסתייגות) בתחתית כל עמוד
+  const SUM_PAD_X = 28, SUM_PAD_TOP = 22, SUM_GAP = [10, 30], SUM_FOOTER = 44;
   const SUM_CONTENT_W = PORTRAIT_W_PX - SUM_PAD_X * 2;
 
   // שורת תחתית לעמוד בתקציר המנהלים: קו מפריד וההסתייגות (SUMMARY_DISCLAIMER)
@@ -704,7 +706,7 @@ const PdfExport = (() => {
     const el = document.createElement("div");
     el.className = "summary-pdf-head";
     el.style.width = SUM_CONTENT_W + "px";
-    el.innerHTML = pageNum === 1 ? summaryLetterheadHTML() : summaryRunningHeadHTML();
+    el.innerHTML = summarySlashSpace(pageNum === 1 ? summaryLetterheadHTML() : summaryRunningHeadHTML());
     document.body.appendChild(el);
     return el;
   }
@@ -773,7 +775,7 @@ const PdfExport = (() => {
             if (next != null) start = next;
           }
           const hh = headH[slices.length ? 1 : 0];
-          const avail = (PORTRAIT_H_PX - SUM_PAD_TOP - hh - SUM_GAP - SUM_FOOTER) / f;
+          const avail = (PORTRAIT_H_PX - SUM_PAD_TOP - hh - SUM_GAP[slices.length ? 1 : 0] - SUM_FOOTER) / f;
           const tbl = tables.find((t) => t.top < start - 1 && start < t.bottom - 1);
           const rep = tbl ? [tbl.top, tbl.head] : null;
           const room = avail - (rep ? rep[1] - rep[0] : 0);
@@ -813,7 +815,7 @@ const PdfExport = (() => {
         fitImages(head);
         const headCanvas = await html2canvas(head, { scale: S, backgroundColor: "#ffffff" });
         ctx.drawImage(headCanvas, x, SUM_PAD_TOP * S);
-        let y = (SUM_PAD_TOP + headH[p ? 1 : 0] + SUM_GAP) * S;
+        let y = (SUM_PAD_TOP + headH[p ? 1 : 0] + SUM_GAP[p ? 1 : 0]) * S;
         const { start, end, rep } = slices[p];
         if (rep) y += strip(ctx, rep[0], rep[1], y);
         strip(ctx, start, end, y);
