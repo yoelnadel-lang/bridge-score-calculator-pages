@@ -63,25 +63,25 @@
 <div class="app-chrome no-print">
   <div class="toolbar-bar">
     <div class="toolbar-actions">
-      <button id="btn-example" class="btn">📂 טען דוגמה BR-11</button>
+      <button id="btn-example" class="btn" title="טעינת סקירה לדוגמה BR-11">📂 דוגמה BR-11</button>
       <button id="btn-load-file" class="btn" title="טעינת סקירה מקובץ ה-ZIP המלא (כולל תמונות) או מקובץ הטעינה JSON שבתוכו (טקסט בלבד)">📂 טען מקובץ</button>
       <input type="file" id="load-file-input" hidden accept=".zip,.json,application/zip,application/json">
-      <button id="btn-attach" class="btn" title="שליפת קבצי תמונות/סקיצות מתיקיית הגשר, לפי הקוד שנרשם בכל שורה">📎 הוסף קבצים מצורפים</button>
-      <button id="btn-attach-files" class="btn btn-sm" title="גיבוי לדפדפנים שלא תומכים בבחירת תיקייה שלמה">בחירת קבצים בודדים</button>
+      <button id="btn-attach" class="btn" title="שליפת קבצי תמונות/סקיצות מתיקיית הגשר, לפי הקוד שנרשם בכל שורה">📎 קבצים מצורפים</button>
+      <button id="btn-attach-files" class="btn btn-sm" title="גיבוי לדפדפנים שלא תומכים בבחירת תיקייה שלמה — בחירת קבצים בודדים">בחירת קבצים</button>
       <input type="file" id="attach-dir-input" webkitdirectory multiple hidden>
       <input type="file" id="attach-files-input" multiple hidden accept="image/*">
       <label class="toolbar-checkbox" title="מוסיף סימן מים 'טיוטה להגשה' לכל עמודי דוח הסקירה המיוצא (PDF וגם בתוך ה-ZIP) — לא משנה את תוכן הסקירה עצמו">
         <input type="checkbox" id="draft-watermark"> טיוטה להגשה
       </label>
-      <button id="btn-pdf-report" class="btn">📄 ייצוא דוח סקירה</button>
-      <button id="btn-pdf-summary" class="btn">📊 ייצוא תקציר מנהלים</button>
-      <button id="btn-pdf-idcard" class="btn">🪪 ייצוא ת.ז</button>
-      <button id="btn-pdf-calc" class="btn" title="פירוט מלא של כל הנוסחאות וההצבות שקבעו את הציון, כמו בלשונית 'בקרה'">🧮 ייצוא חישוב ציון</button>
-      <button id="btn-xlsx-both" class="btn" title="ממלא את תבנית ה-Excel האמיתית של 'חישוב ציון גשר' בנתוני הסקירה (נוסחאות אמיתיות), ומייצא גם PDF תואם">🖨️📗 ייצוא חישוב ציון PDF + EXCEL</button>
-      <button id="btn-pdf-zip" class="btn" title="קובץ ZIP אחד עם דוח הסקירה (PDF) וקובץ טעינה (JSON) — להעברה, שיתוף או גיבוי">📦 ייצוא סקירה (ZIP)</button>
+      <button id="btn-pdf-report" class="btn" title="ייצוא דוח סקירה (PDF)">📄 דוח סקירה</button>
+      <button id="btn-pdf-summary" class="btn" title="ייצוא תקציר מנהלים (PDF)">📊 תקציר מנהלים</button>
+      <button id="btn-pdf-idcard" class="btn" title="ייצוא תעודת זהות של המבנה (PDF)">🪪 ת.ז</button>
+      <button id="btn-pdf-calc" class="btn" title="ייצוא חישוב ציון: פירוט מלא של כל הנוסחאות וההצבות שקבעו את הציון, כמו בלשונית 'בקרה'">🧮 חישוב ציון</button>
+      <button id="btn-xlsx-both" class="btn" title="ייצוא חישוב ציון PDF + EXCEL: ממלא את תבנית ה-Excel האמיתית של 'חישוב ציון גשר' בנתוני הסקירה (נוסחאות אמיתיות), ומייצא גם PDF תואם">📗 חישוב + EXCEL</button>
+      <button id="btn-pdf-zip" class="btn" title="ייצוא סקירה (ZIP): קובץ ZIP אחד עם דוח הסקירה (PDF) וקובץ טעינה (JSON) — להעברה, שיתוף או גיבוי">📦 סקירה (ZIP)</button>
       <button id="btn-scan-qr" class="btn" title="שחזור נתונים מקוד QR שהודפס בדוח קודם — לא כולל תמונות">📷 שחזור מ-QR</button>
-      <button id="btn-print" class="btn">🖨️ הדפסת דוח</button>
-      <button id="btn-reset" class="btn btn-danger">🗑️ איפוס</button>
+      <button id="btn-print" class="btn" title="הדפסת דוח">🖨️ הדפסה</button>
+      <button id="btn-reset" class="btn btn-danger" title="איפוס כל הנתונים">🗑️ איפוס</button>
     </div>
     <div class="toolbar-brand">
       <span class="brand-title">דו"ח סקירה</span>
